@@ -1,0 +1,56 @@
+-- Create the database if it doesn't exist
+CREATE DATABASE IF NOT EXISTS museosmart;
+USE museosmart;
+
+-- Create system_user table
+CREATE TABLE IF NOT EXISTS system_user (
+    user_ID INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    firstname VARCHAR(50) NOT NULL,
+    lastname VARCHAR(50) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role ENUM('admin', 'user') DEFAULT 'user',
+    status ENUM('active', 'deactivated') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create bookings table
+DROP TABLE IF EXISTS visitors;
+DROP TABLE IF EXISTS bookings;
+
+CREATE TABLE IF NOT EXISTS bookings (
+    booking_id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    type ENUM('individual', 'group') NOT NULL,
+    status ENUM('pending', 'visited', 'cancelled') DEFAULT 'pending',
+    date DATE NOT NULL,
+    time_slot VARCHAR(20) NOT NULL,
+    total_visitors INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create visitors table
+CREATE TABLE IF NOT EXISTS visitors (
+    visitor_id INT AUTO_INCREMENT PRIMARY KEY,
+    booking_id INT NOT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    gender ENUM('male', 'female', 'other') NOT NULL,
+    address TEXT NOT NULL,
+    email VARCHAR(100) NOT NULL,
+    nationality VARCHAR(50) NOT NULL,
+    purpose VARCHAR(30) NOT NULL,
+    status ENUM('pending', 'visited', 'cancelled') DEFAULT 'pending',
+    is_main_visitor BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id) REFERENCES bookings(booking_id) ON DELETE CASCADE
+);
+
+-- Insert a default admin user (password: admin123)
+INSERT INTO system_user (username, firstname, lastname, password, role, status) 
+VALUES ('admin', 'Admin', 'User', 'admin123', 'admin', 'active')
+ON DUPLICATE KEY UPDATE username = username;
+
+-- Show tables
+SHOW TABLES; 
