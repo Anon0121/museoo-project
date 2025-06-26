@@ -9,7 +9,7 @@ import Exhibit from "./Exhibit";
 import Event from "./Event";
 import Archive from "./Archive";
 import Donation from "./Donation";
-import Settings from "./Settings";
+import Settings from "./settings";
 import AddUser from "./AddUser";
 
 const AdminDashboard = () => {
