@@ -185,6 +185,10 @@ app.delete('/api/users/:id', async (req, res) => {
 app.use('/api/slots', require('./routes/slots'));
 app.use('/api/activities', require('./routes/activities'));
 
+const archiveRoutes = require('./routes/archive');
+app.use('/api/archives', archiveRoutes);
+app.use('/uploads/archives', express.static(__dirname + '/uploads/archives'));
+
 app.get('/', (req, res) => {
   res.send('Backend is running!');
 });

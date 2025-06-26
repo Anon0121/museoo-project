@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from "react";
 
+function formatDate(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
 const Exhibit = () => {
   const [exhibits, setExhibits] = useState([]);
   const [form, setForm] = useState({
@@ -265,8 +275,8 @@ const Exhibit = () => {
             <div className="mb-2"><strong>Location:</strong> {modalExhibit.location}</div>
             <div className="mb-2"><strong>Curator:</strong> {modalExhibit.curator}</div>
             <div className="mb-2"><strong>Category:</strong> {modalExhibit.category}</div>
-            <div className="mb-2"><strong>Start Date:</strong> {modalExhibit.startDate}</div>
-            <div className="mb-2"><strong>End Date:</strong> {modalExhibit.endDate}</div>
+            <div className="mb-2"><strong>Start Date:</strong> {formatDate(modalExhibit.startDate)}</div>
+            <div className="mb-2"><strong>End Date:</strong> {formatDate(modalExhibit.endDate)}</div>
           </div>
         </div>
       )}
@@ -308,8 +318,8 @@ const Section = ({ title, data, onDelete, onView, hideDelete = false }) => {
                     )}
                   </td>
                   <td className="p-3 font-semibold">{item.title}</td>
-                  <td className="p-3">{item.startDate}</td>
-                  <td className="p-3">{item.endDate}</td>
+                  <td className="p-3">{formatDate(item.startDate)}</td>
+                  <td className="p-3">{formatDate(item.endDate)}</td>
                   {!hideDelete && (
                     <td className="p-3 flex gap-2">
                       <button

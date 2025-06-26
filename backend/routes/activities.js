@@ -21,8 +21,8 @@ router.post('/', upload.array('images'), async (req, res) => {
     // 2. Insert into event_details or exhibit_details
     if (type === 'event') {
       await pool.query(
-        'INSERT INTO event_details (activity_id, start_date, end_date, location, organizer) VALUES (?, ?, ?, ?, ?)',
-        [activityId, details.start_date, details.end_date, details.location, details.organizer]
+        'INSERT INTO event_details (activity_id, start_date, time, location, organizer) VALUES (?, ?, ?, ?, ?)',
+        [activityId, details.start_date, details.time, details.location, details.organizer]
       );
     } else if (type === 'exhibit') {
       await pool.query(
