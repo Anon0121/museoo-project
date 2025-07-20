@@ -192,6 +192,9 @@ app.use('/uploads/archives', express.static(__dirname + '/uploads/archives'));
 
 app.use('/api/donations', require('./routes/donations'));
 
+const statsRouter = require('./routes/stats');
+app.use('/api/stats', statsRouter);
+
 app.get('/', (req, res) => {
   res.send('Backend is running!');
 });

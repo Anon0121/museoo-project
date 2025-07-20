@@ -180,22 +180,25 @@ const Schedule = () => {
   const handleApproveBooking = async (booking) => {
     if (window.confirm(`Approve booking for ${booking.first_name} ${booking.last_name}?`)) {
       try {
-        // You'll need to implement this API endpoint
         const response = await fetch(`http://localhost:3000/api/slots/bookings/${booking.booking_id}/approve`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'approved' })
         });
-        
-        if (response.ok) {
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
           alert('Booking approved successfully!');
-          fetchBookings(); // Refresh the list
+          fetchBookings(); // Only refresh if success
         } else {
-          alert('Failed to approve booking');
+          alert('Failed to approve booking: ' + (data.message || 'Unknown error'));
+          // Do NOT refresh bookings, so status/button stays as pending
         }
       } catch (error) {
         console.error('Error approving booking:', error);
         alert('Error approving booking');
+        // Do NOT refresh bookings, so status/button stays as pending
       }
     }
   };
@@ -498,11 +501,16 @@ const Schedule = () => {
                                 👁️ View
                               </button>
                               <button className="text-red-600 hover:text-red-900 transition-colors duration-150" onClick={() => handleCancelBooking(booking)}>
-                                ✕ Cancel
+                                ❌ Cancel
                               </button>
-                              <button className="text-gray-600 hover:text-gray-900 transition-colors duration-150" onClick={() => deleteSchedule(booking.booking_id)}>
-                                🗑️ Delete
-                              </button>
+                              {booking.status === 'pending' && (
+                                <button
+                                  className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition-colors duration-150"
+                                  onClick={() => handleApproveBooking(booking)}
+                                >
+                                  Approve
+                                </button>
+                              )}
                             </>
                           )}
                         </div>

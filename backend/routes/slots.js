@@ -1,6 +1,8 @@
 const express = require('express');
 const pool = require('../db');
 const router = express.Router();
+const QRCode = require('qrcode');
+const nodemailer = require('nodemailer');
 
 const SLOT_CAPACITY = 30;
 const TIME_SLOTS = [
@@ -118,14 +120,51 @@ router.get('/all', async (req, res) => {
 router.put('/bookings/:id/approve', async (req, res) => {
   const { id } = req.params;
   try {
+    // 1. Approve the booking
     await pool.query(
       `UPDATE bookings SET status = 'approved' WHERE booking_id = ?`,
       [id]
     );
-    res.json({ success: true, message: 'Booking approved successfully' });
+
+    // 2. Get main visitor's email and name
+    const [visitorRows] = await pool.query(
+      `SELECT email, first_name, last_name FROM visitors WHERE booking_id = ? AND is_main_visitor = true`,
+      [id]
+    );
+    if (!visitorRows.length || !visitorRows[0].email) {
+      return res.json({ success: true, message: 'Booking approved, but no email sent (no visitor email found).' });
+    }
+    const visitor = visitorRows[0];
+
+    // 3. Generate QR code (encode a check-in URL)
+    const checkinUrl = `http://localhost:3000/api/visit/checkin/${id}`;
+    const qrDataUrl = await QRCode.toDataURL(checkinUrl);
+
+    // 4. Send email with QR code
+    let transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'museoweb1@gmail.com',
+        pass: 'akrtgds yyprsfxyi'
+      }
+    });
+    const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+    await transporter.sendMail({
+      from: 'MuseoSmart <your-email@gmail.com>',
+      to: visitor.email,
+      subject: 'Your Museum Visit is Confirmed!',
+      text: `Hi ${visitor.first_name},\n\nYour schedule is confirmed! Please present this QR code at the museum for check-in.`,
+      attachments: [{
+        filename: 'qrcode.png',
+        content: Buffer.from(base64Data, 'base64'),
+        contentType: 'image/png'
+      }]
+    });
+
+    res.json({ success: true, message: 'Booking approved and email sent!' });
   } catch (err) {
     console.error('Error approving booking:', err);
-    res.status(500).json({ error: 'Database error' });
+    res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
 
