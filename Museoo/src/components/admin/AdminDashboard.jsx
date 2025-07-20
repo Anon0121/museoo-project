@@ -11,6 +11,7 @@ import Archive from "./Archive";
 import Donation from "./Donation";
 import Settings from "./settings";
 import AddUser from "./AddUser";
+import CulturalObjects from "./CulturalObjects";
 
 const AdminDashboard = () => {
   const [user, setUser] = useState(null);
@@ -69,6 +70,7 @@ const AdminDashboard = () => {
     { name: "Visitors", icon: "fa-person-walking" },
     { name: "Exhibit", icon: "fa-eye" },
     { name: "Event", icon: "fa-calendar-week" },
+    { name: "CulturalObjects", icon: "fa-landmark" },
     { name: "Archive", icon: "fa-box-archive" },
     { name: "Donation", icon: "fa-hand-holding-dollar" },
     { name: "Settings", icon: "fa-gear" },
@@ -191,6 +193,7 @@ const AdminDashboard = () => {
           {activeTab === "Visitors" && <Visitors />}
           {activeTab === "Exhibit" && <Exhibit />}
           {activeTab === "Event" && <Event />}
+          {activeTab === "CulturalObjects" && <CulturalObjects />}
           {activeTab === "Archive" && <Archive />}
           {activeTab === "Donation" && <Donation />}
           {activeTab === "Settings" && <Settings />}

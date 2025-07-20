@@ -1,146 +1,264 @@
 import React, { useState } from "react";
 
-const Donation = () => {
-  const [donations, setDonations] = useState([]);
-  const [form, setForm] = useState({
-    name: "",
-    amount: "",
-    date: "",
-  });
+const initialGeneral = {
+  donor_name: "",
+  donor_email: "",
+  donor_contact: "",
+  type: "monetary",
+  date_received: "",
+  notes: "",
+};
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+const initialDetails = {
+  amount: "",
+  method: "",
+  item_description: "",
+  estimated_value: "",
+  condition: "",
+  loan_start_date: "",
+  loan_end_date: "",
+};
+
+const DonationForm = ({ onSuccess }) => {
+  const [general, setGeneral] = useState(initialGeneral);
+  const [details, setDetails] = useState(initialDetails);
+  const [loading, setLoading] = useState(false);
+
+  const handleGeneralChange = (e) => {
+    setGeneral({ ...general, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleDetailsChange = (e) => {
+    setDetails({ ...details, [e.target.name]: e.target.value });
+  };
+
+  const handleTypeChange = (e) => {
+    setGeneral({ ...general, type: e.target.value });
+    setDetails(initialDetails); // reset details on type change
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
 
-    if (!form.name.trim() || !form.amount || !form.date) {
-      alert("Please fill all fields.");
-      return;
+    // Combine general and details for submission
+    const payload = { ...general, ...details };
+
+    try {
+      const res = await fetch("http://localhost:3000/api/donations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Donation recorded!");
+        setGeneral(initialGeneral);
+        setDetails(initialDetails);
+        if (onSuccess) onSuccess();
+      } else {
+        alert("Failed to record donation.");
+      }
+    } catch (err) {
+      alert("Error saving donation.");
     }
-
-    const newDonation = {
-      id: Date.now(),
-      name: form.name,
-      amount: parseFloat(form.amount),
-      date: form.date,
-    };
-
-    setDonations([newDonation, ...donations]);
-    setForm({ name: "", amount: "", date: "" });
+    setLoading(false);
   };
-
-  const handleDelete = (id) => {
-    setDonations((prev) => prev.filter((donation) => donation.id !== id));
-  };
-
-  const formatCurrency = (amount) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Donation Records</h1>
+    <form onSubmit={handleSubmit} className="bg-white rounded shadow p-6 max-w-xl mx-auto space-y-4">
+      <h2 className="text-xl font-bold mb-2">Add Donation</h2>
+      <div>
+        <label className="block font-medium mb-1">Donor Name *</label>
+        <input
+          type="text"
+          name="donor_name"
+          value={general.donor_name}
+          onChange={handleGeneralChange}
+          className="w-full border rounded px-3 py-2"
+          required
+        />
+      </div>
+      <div>
+        <label className="block font-medium mb-1">Donor Email</label>
+        <input
+          type="email"
+          name="donor_email"
+          value={general.donor_email}
+          onChange={handleGeneralChange}
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
+      <div>
+        <label className="block font-medium mb-1">Donor Contact</label>
+        <input
+          type="text"
+          name="donor_contact"
+          value={general.donor_contact}
+          onChange={handleGeneralChange}
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
+      <div>
+        <label className="block font-medium mb-1">Donation Type *</label>
+        <select
+          name="type"
+          value={general.type}
+          onChange={handleTypeChange}
+          className="w-full border rounded px-3 py-2"
+        >
+          <option value="monetary">Monetary</option>
+          <option value="in-kind">In-Kind (Object)</option>
+          <option value="loan">Loaned Artifact</option>
+        </select>
+      </div>
+      <div>
+        <label className="block font-medium mb-1">Date Received</label>
+        <input
+          type="date"
+          name="date_received"
+          value={general.date_received}
+          onChange={handleGeneralChange}
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
+      <div>
+        <label className="block font-medium mb-1">Notes</label>
+        <textarea
+          name="notes"
+          value={general.notes}
+          onChange={handleGeneralChange}
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
 
-      {/* Donation Form */}
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-6 rounded-lg shadow mb-10 space-y-4"
-      >
-        <div>
-          <label className="block font-medium mb-1">Donor Name</label>
-          <input
-            type="text"
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            className="w-full border rounded px-3 py-2"
-            required
-          />
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
+      {/* Type-specific fields */}
+      {general.type === "monetary" && (
+        <>
           <div>
-            <label className="block font-medium mb-1">Amount</label>
+            <label className="block font-medium mb-1">Amount *</label>
             <input
               type="number"
               name="amount"
-              value={form.amount}
-              onChange={handleChange}
+              value={details.amount}
+              onChange={handleDetailsChange}
               className="w-full border rounded px-3 py-2"
-              step="0.01"
-              min="0"
               required
             />
           </div>
-
           <div>
-            <label className="block font-medium mb-1">Date</label>
+            <label className="block font-medium mb-1">Method</label>
+            <input
+              type="text"
+              name="method"
+              value={details.method}
+              onChange={handleDetailsChange}
+              className="w-full border rounded px-3 py-2"
+              placeholder="e.g., Cash, Check, Online"
+            />
+          </div>
+        </>
+      )}
+
+      {general.type === "in-kind" && (
+        <>
+          <div>
+            <label className="block font-medium mb-1">Item Description *</label>
+            <textarea
+              name="item_description"
+              value={details.item_description}
+              onChange={handleDetailsChange}
+              className="w-full border rounded px-3 py-2"
+              required
+            />
+          </div>
+          <div>
+            <label className="block font-medium mb-1">Estimated Value</label>
+            <input
+              type="number"
+              name="estimated_value"
+              value={details.estimated_value}
+              onChange={handleDetailsChange}
+              className="w-full border rounded px-3 py-2"
+            />
+          </div>
+          <div>
+            <label className="block font-medium mb-1">Condition</label>
+            <input
+              type="text"
+              name="condition"
+              value={details.condition}
+              onChange={handleDetailsChange}
+              className="w-full border rounded px-3 py-2"
+            />
+          </div>
+        </>
+      )}
+
+      {general.type === "loan" && (
+        <>
+          <div>
+            <label className="block font-medium mb-1">Item Description *</label>
+            <textarea
+              name="item_description"
+              value={details.item_description}
+              onChange={handleDetailsChange}
+              className="w-full border rounded px-3 py-2"
+              required
+            />
+          </div>
+          <div>
+            <label className="block font-medium mb-1">Estimated Value</label>
+            <input
+              type="number"
+              name="estimated_value"
+              value={details.estimated_value}
+              onChange={handleDetailsChange}
+              className="w-full border rounded px-3 py-2"
+            />
+          </div>
+          <div>
+            <label className="block font-medium mb-1">Condition</label>
+            <input
+              type="text"
+              name="condition"
+              value={details.condition}
+              onChange={handleDetailsChange}
+              className="w-full border rounded px-3 py-2"
+            />
+          </div>
+          <div>
+            <label className="block font-medium mb-1">Loan Start Date</label>
             <input
               type="date"
-              name="date"
-              value={form.date}
-              onChange={handleChange}
+              name="loan_start_date"
+              value={details.loan_start_date}
+              onChange={handleDetailsChange}
               className="w-full border rounded px-3 py-2"
-              required
             />
           </div>
-        </div>
+          <div>
+            <label className="block font-medium mb-1">Loan End Date</label>
+            <input
+              type="date"
+              name="loan_end_date"
+              value={details.loan_end_date}
+              onChange={handleDetailsChange}
+              className="w-full border rounded px-3 py-2"
+            />
+          </div>
+        </>
+      )}
 
-        <button
-          type="submit"
-          className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded"
-        >
-          Add Donation
-        </button>
-      </form>
-
-      {/* Donations Table */}
-      <div className="bg-white rounded-lg shadow overflow-x-auto">
-        <h2 className="text-lg font-semibold px-6 pt-6">All Donations</h2>
-        {donations.length === 0 ? (
-          <p className="text-gray-500 p-6">No donations recorded yet.</p>
-        ) : (
-          <table className="w-full text-sm text-left border-separate border-spacing-y-2 px-6 pb-6">
-            <thead className="bg-gray-100 text-gray-700 font-medium">
-              <tr>
-                <th className="p-3">Donor</th>
-                <th className="p-3">Amount</th>
-                <th className="p-3">Date</th>
-                <th className="p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {donations.map((donation) => (
-                <tr key={donation.id} className="bg-white hover:bg-gray-50">
-                  <td className="p-3 font-semibold">{donation.name}</td>
-                  <td className="p-3 text-green-600">
-                    {formatCurrency(donation.amount)}
-                  </td>
-                  <td className="p-3">{donation.date}</td>
-                  <td className="p-3">
-                    <button
-                      onClick={() => handleDelete(donation.id)}
-                      className="text-red-600 hover:underline text-sm"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
+      <button
+        type="submit"
+        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
+        disabled={loading}
+      >
+        {loading ? "Saving..." : "Save Donation"}
+      </button>
+    </form>
   );
 };
 
-export default Donation;
+export default DonationForm;

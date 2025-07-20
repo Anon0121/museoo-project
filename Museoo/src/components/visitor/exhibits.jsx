@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 
 const Exhibits = () => {
-  const [exhibits, setExhibits] = useState([]);
+  const [upcoming, setUpcoming] = useState([]);
+  const [ongoing, setOngoing] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalExhibit, setModalExhibit] = useState(null);
 
@@ -20,17 +21,56 @@ const Exhibits = () => {
           category: ex.category,
           description: ex.description,
         }));
-        // Only upcoming exhibits
         const now = new Date();
-        const upcoming = mapped.filter((ex) => new Date(ex.startDate) > now);
-        setExhibits(upcoming);
+        setUpcoming(mapped.filter((ex) => new Date(ex.startDate) > now));
+        setOngoing(
+          mapped.filter(
+            (ex) =>
+              new Date(ex.startDate) <= now && new Date(ex.endDate) >= now
+          )
+        );
         setLoading(false);
       })
       .catch(() => {
-        setExhibits([]);
+        setUpcoming([]);
+        setOngoing([]);
         setLoading(false);
       });
   }, []);
+
+  const ExhibitCard = ({ exhibit }) => (
+    <div key={exhibit.id} className="bg-gray-200 rounded-lg shadow p-4 flex flex-col items-stretch">
+      {/* Image */}
+      {exhibit.images && exhibit.images.length > 0 ? (
+        <div className="w-full aspect-[4/3] bg-white flex items-center justify-center mb-4 border">
+          <img
+            src={`http://localhost:3000${exhibit.images[0]}`}
+            alt={exhibit.title}
+            className="object-contain max-h-48 w-full"
+          />
+        </div>
+      ) : (
+        <div className="w-full aspect-[4/3] bg-white flex items-center justify-center mb-4 border">
+          <span className="text-gray-400 italic">No Image</span>
+        </div>
+      )}
+      {/* Title */}
+      <div className="text-left font-bold text-lg mb-1">TITLE: <span className="font-normal">{exhibit.title}</span></div>
+      {/* Dates */}
+      <div className="text-left text-sm mb-1">
+        <span className="font-semibold">Dates:</span> <span className="font-normal">{exhibit.startDate} - {exhibit.endDate}</span>
+      </div>
+      {/* Location */}
+      <div className="text-left text-sm mb-3">LOCATION: {exhibit.location}</div>
+      {/* See More */}
+      <button
+        className="text-left mt-2 text-blue-700 hover:underline text-base font-medium"
+        onClick={() => setModalExhibit(exhibit)}
+      >
+        See More
+      </button>
+    </div>
+  );
 
   return (
     <section className="w-[90%] mx-auto text-center pt-24" id="exhibit">
@@ -40,42 +80,25 @@ const Exhibits = () => {
       </p>
       {loading ? (
         <div className="text-gray-500">Loading...</div>
-      ) : exhibits.length === 0 ? (
+      ) : upcoming.length === 0 ? (
         <div className="text-gray-500">No upcoming exhibits at the moment.</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {exhibits.map((exhibit) => (
-            <div key={exhibit.id} className="bg-gray-200 rounded-lg shadow p-4 flex flex-col items-stretch">
-              {/* Image */}
-              {exhibit.images && exhibit.images.length > 0 ? (
-                <div className="w-full aspect-[4/3] bg-white flex items-center justify-center mb-4 border">
-                  <img
-                    src={`http://localhost:3000${exhibit.images[0]}`}
-                    alt={exhibit.title}
-                    className="object-contain max-h-48 w-full"
-                  />
-                </div>
-              ) : (
-                <div className="w-full aspect-[4/3] bg-white flex items-center justify-center mb-4 border">
-                  <span className="text-gray-400 italic">No Image</span>
-                </div>
-              )}
-              {/* Title */}
-              <div className="text-left font-bold text-lg mb-1">TITLE: <span className="font-normal">{exhibit.title}</span></div>
-              {/* Dates */}
-              <div className="text-left text-sm mb-1">
-                <span className="font-semibold">Dates:</span> <span className="font-normal">{exhibit.startDate} - {exhibit.endDate}</span>
-              </div>
-              {/* Location */}
-              <div className="text-left text-sm mb-3">LOCATION: {exhibit.location}</div>
-              {/* See More */}
-              <button
-                className="text-left mt-2 text-blue-700 hover:underline text-base font-medium"
-                onClick={() => setModalExhibit(exhibit)}
-              >
-                See More
-              </button>
-            </div>
+          {upcoming.map((exhibit) => (
+            <ExhibitCard key={exhibit.id} exhibit={exhibit} />
+          ))}
+        </div>
+      )}
+
+      <h1 className="text-3xl md:text-4xl font-bold mb-4 mt-16">Ongoing Exhibits</h1>
+      {loading ? (
+        <div className="text-gray-500">Loading...</div>
+      ) : ongoing.length === 0 ? (
+        <div className="text-gray-500">No ongoing exhibits at the moment.</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {ongoing.map((exhibit) => (
+            <ExhibitCard key={exhibit.id} exhibit={exhibit} />
           ))}
         </div>
       )}
