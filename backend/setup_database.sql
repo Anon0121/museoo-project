@@ -47,6 +47,76 @@ CREATE TABLE IF NOT EXISTS visitors (
     FOREIGN KEY (booking_id) REFERENCES bookings(booking_id) ON DELETE CASCADE
 );
 
+-- Create activities table (for events and exhibits)
+CREATE TABLE IF NOT EXISTS activities (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    type ENUM('event', 'exhibit') NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create event_details table
+CREATE TABLE IF NOT EXISTS event_details (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    activity_id INT NOT NULL,
+    start_date DATE NOT NULL,
+    time TIME NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    organizer VARCHAR(255) NOT NULL,
+    FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE
+);
+
+-- Create exhibit_details table
+CREATE TABLE IF NOT EXISTS exhibit_details (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    activity_id INT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    curator VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE
+);
+
+-- Create images table
+CREATE TABLE IF NOT EXISTS images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    activity_id INT,
+    cultural_object_id INT,
+    url VARCHAR(500) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE
+);
+
+-- Main table: general info
+CREATE TABLE IF NOT EXISTS cultural_objects (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Details table: extended info
+CREATE TABLE IF NOT EXISTS object_details (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cultural_object_id INT NOT NULL,
+    period VARCHAR(100),
+    origin VARCHAR(255),
+    material VARCHAR(255),
+    dimensions VARCHAR(100),
+    condition_status ENUM('excellent', 'good', 'fair', 'poor', 'under_restoration') DEFAULT 'good',
+    acquisition_date DATE,
+    acquisition_method ENUM('purchase', 'donation', 'loan', 'excavation', 'other'),
+    current_location VARCHAR(255),
+    estimated_value DECIMAL(15,2),
+    conservation_notes TEXT,
+    exhibition_history TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (cultural_object_id) REFERENCES cultural_objects(id) ON DELETE CASCADE
+);
+
 -- Insert a default admin user (password: admin123)
 INSERT INTO system_user (username, firstname, lastname, password, role, status) 
 VALUES ('admin', 'Admin', 'User', 'admin123', 'admin', 'active')
