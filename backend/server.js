@@ -21,16 +21,17 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: allowedOrigins,
-  credentials: true // if you use cookies or authentication
+  credentials: true
 }));
 
+// For production, use a persistent session store (e.g., Redis) instead of MemoryStore!
 app.use(session({
   secret: 'your_secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    sameSite: 'none', // Important for cross-site cookies
-    secure: true      // Important for HTTPS (Vercel/Railway)
+    sameSite: 'none', // Required for cross-site cookies
+    secure: true      // Required for HTTPS
   }
 }));
 
