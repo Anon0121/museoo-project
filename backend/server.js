@@ -12,20 +12,25 @@ app.use('/uploads', express.static('uploads'));
 
 // ✅ Middleware
 app.use(bodyParser.json());
+
+// Allow both local and Vercel frontend
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://museoo-project.vercel.app'
+];
+
 app.use(cors({
-  origin: 'http://localhost:5173',
-  credentials: true
+  origin: allowedOrigins,
+  credentials: true // if you use cookies or authentication
 }));
 
 app.use(session({
-  secret: 'museosmart_secret_key',
+  secret: 'your_secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 3600000, // 1 hour
-    httpOnly: true,
-    secure: false,   // false for localhost
-    sameSite: 'lax'
+    sameSite: 'none', // Important for cross-site cookies
+    secure: true      // Important for HTTPS (Vercel/Railway)
   }
 }));
 

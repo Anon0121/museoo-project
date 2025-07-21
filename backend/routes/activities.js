@@ -60,10 +60,14 @@ router.get('/exhibits', async (req, res) => {
     );
 
     // Get all images for these exhibits
-    const [images] = await pool.query(
-      "SELECT * FROM images WHERE activity_id IN (?)",
-      [exhibits.map(e => e.id)]
-    );
+    let images = [];
+    const exhibitIds = exhibits.map(e => e.id);
+    if (exhibitIds.length > 0) {
+      [images] = await pool.query(
+        "SELECT * FROM images WHERE activity_id IN (?)",
+        [exhibitIds]
+      );
+    }
 
     // Attach images to each exhibit
     const exhibitsWithImages = exhibits.map(ex => ({
