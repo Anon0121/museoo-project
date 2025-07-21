@@ -5,7 +5,7 @@ const bodyParser = require('body-parser');
 const pool = require('./db'); // Import the pool from db.js
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Serve uploaded images
 app.use('/uploads', express.static('uploads'));
