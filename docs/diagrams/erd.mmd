@@ -1,0 +1,95 @@
+erDiagram
+  BOOKING ||--o{ VISITOR : "has"
+  BOOKING ||--o{ CHECKIN : "tracks"
+  VISITOR ||--o{ CHECKIN : "may_have"
+  USER ||--o{ BOOKING : "creates"
+  USER ||--o{ EXHIBIT : "manages"
+  USER ||--o{ EVENT : "manages"
+  USER ||--o{ ARCHIVE_ITEM : "manages"
+  VISITOR ||--o{ DONATION : "makes"
+
+  BOOKING {
+    int id PK
+    enum type "individual|group"
+    enum status "pending|confirmed|cancelled"
+    date visit_date
+    string time_slot
+    int total_visitors
+    string main_first_name
+    string main_last_name
+    datetime created_at
+  }
+
+  VISITOR {
+    int id PK
+    int booking_id FK
+    string first_name
+    string last_name
+    enum gender "male|female|other"
+    string address
+    string email
+    string nationality
+    string purpose
+    enum status "pending|checked_in|cancelled"
+    bool is_main_visitor
+  }
+
+  CHECKIN {
+    int id PK
+    int booking_id FK
+    int visitor_id FK
+    datetime scanned_at
+    enum status "success|duplicate|manual"
+  }
+
+  USER {
+    int id PK
+    string name
+    string email
+    string password_hash
+    enum role "admin|staff"
+    datetime created_at
+  }
+
+  EXHIBIT {
+    int id PK
+    string title
+    string description
+    string image_url
+    string qr_code
+    datetime created_at
+  }
+
+  EVENT {
+    int id PK
+    string title
+    string description
+    datetime start_at
+    datetime end_at
+    int capacity
+  }
+
+  DONATION {
+    int id PK
+    string donor_name
+    string donor_email
+    decimal amount
+    string method
+    datetime created_at
+  }
+
+  ARCHIVE_ITEM {
+    int id PK
+    string title
+    string description
+    string file_url
+    string metadata_json
+    datetime created_at
+  }
+
+
+
+
+
+
+

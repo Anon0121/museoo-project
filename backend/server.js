@@ -9,13 +9,22 @@ const PORT = process.env.PORT || 3000;
 
 // Serve uploaded images
 app.use('/uploads', express.static('uploads'));
+app.use('/uploads/profiles', express.static('uploads/profiles'));
 
 // ✅ Middleware
 app.use(bodyParser.json());
+// Ensure activity log table exists
+const { ensureActivityLogTable, logActivity } = require('./utils/activityLogger');
+ensureActivityLogTable().catch(err => console.error('Activity log table ensure failed:', err));
+
 
 // Allow both local and Vercel frontend
 const allowedOrigins = [
   'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://192.168.1.4:5173',
+  'http://192.168.56.1:5173',
+  'http://192.168.1.6:5173',
   'https://museoo-project.vercel.app'
 ];
 
@@ -30,8 +39,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    sameSite: 'none', // Required for cross-site cookies
-    secure: true      // Required for HTTPS
+    // Removed secure and sameSite for local development
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
 
@@ -41,7 +50,10 @@ const isAuthenticated = (req, res, next) => {
   return res.status(401).json({ success: false, message: 'Not authenticated' });
 };
 
-// ✅ Signup route
+// Import user utilities
+const { generateSecurePassword, hashPassword, verifyPassword, sendUserCredentials } = require('./utils/userUtils');
+
+// ✅ Signup route (for regular signup)
 app.post('/api/signup', async (req, res) => {
   const { username, firstname, lastname, password, role } = req.body;
 
@@ -50,13 +62,102 @@ app.post('/api/signup', async (req, res) => {
   }
 
   try {
-    const sql = `INSERT INTO system_user (username, firstname, lastname, password, role, status)
-                 VALUES (?, ?, ?, ?, ?, 'active')`;
-    await pool.query(sql, [username, firstname, lastname, password, role]);
+    // Hash the password
+    const hashedPassword = await hashPassword(password);
+    
+    const sql = `INSERT INTO system_user (username, firstname, lastname, email, password, role, status)
+                 VALUES (?, ?, ?, ?, ?, ?, 'active')`;
+    await pool.query(sql, [username, firstname, lastname, `${username}@museum.com`, hashedPassword, role]);
     res.json({ success: true, message: 'Account created successfully!' });
   } catch (err) {
     console.error('❌ Signup error:', err);
     res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ✅ Create user with auto-generated password and email notification
+app.post('/api/create-user', async (req, res) => {
+  const { username, firstname, lastname, email, role, permissions } = req.body;
+
+  if (!username || !firstname || !lastname || !email || role === undefined) {
+    return res.status(400).json({ success: false, message: 'Missing required fields' });
+  }
+
+  try {
+    // Generate secure password
+    const password = generateSecurePassword();
+    
+    // Hash the password before storing
+    const hashedPassword = await hashPassword(password);
+    
+    // Insert user into database with hashed password and permissions
+    const sql = `INSERT INTO system_user (username, firstname, lastname, email, password, role, status, permissions)
+                 VALUES (?, ?, ?, ?, ?, ?, 'active', ?)`;
+    await pool.query(sql, [username, firstname, lastname, email, hashedPassword, role, JSON.stringify(permissions || {})]);
+    
+    // Get the inserted user ID
+    const [result] = await pool.query(`SELECT user_ID FROM system_user WHERE username = ?`, [username]);
+    const userId = result[0].user_ID;
+    
+    // Insert permissions into user_permissions table
+    if (permissions && typeof permissions === 'object') {
+      for (const [permissionName, config] of Object.entries(permissions)) {
+        if (config && typeof config === 'object') {
+          await pool.query(`
+            INSERT INTO user_permissions (user_id, permission_name, is_allowed, access_level) 
+            VALUES (?, ?, ?, ?)
+          `, [userId, permissionName, config.allowed, config.access]);
+        } else {
+          // Handle legacy format (boolean)
+          await pool.query(`
+            INSERT INTO user_permissions (user_id, permission_name, is_allowed, access_level) 
+            VALUES (?, ?, ?, ?)
+          `, [userId, permissionName, config, 'edit']);
+        }
+      }
+    }
+    
+    // Send credentials email with plain text password (for user to see)
+    const emailResult = await sendUserCredentials({
+      username,
+      firstname,
+      lastname,
+      email,
+      password, // Send plain text password in email
+      role
+    });
+    
+    // Log activity
+    logActivity(req, 'user.create', { username, role, emailSent: !!emailResult.success });
+
+    if (emailResult.success) {
+      res.json({ 
+        success: true, 
+        message: 'User created successfully! Credentials have been sent to the user\'s email.',
+        emailSent: true
+      });
+    } else {
+      res.json({ 
+        success: true, 
+        message: 'User created successfully! However, there was an issue sending the credentials email.',
+        emailSent: false,
+        emailError: emailResult.message
+      });
+    }
+  } catch (err) {
+    console.error('❌ Create user error:', err);
+    logActivity(req, 'user.create.error', { username, error: err.message });
+    if (err.code === 'ER_DUP_ENTRY') {
+      if (err.message.includes('username')) {
+        res.status(400).json({ success: false, message: 'Username already exists' });
+      } else if (err.message.includes('email')) {
+        res.status(400).json({ success: false, message: 'Email already exists' });
+      } else {
+        res.status(400).json({ success: false, message: 'Duplicate entry error' });
+      }
+    } else {
+      res.status(500).json({ success: false, message: 'Database error' });
+    }
   }
 });
 
@@ -72,7 +173,10 @@ app.post('/api/login', async (req, res) => {
     }
 
     const user = results[0];
-    if (user.password !== password) {
+    
+    // Verify password using bcrypt
+    const isPasswordValid = await verifyPassword(password, user.password);
+    if (!isPasswordValid) {
       return res.json({ success: false, message: 'Invalid username or password' });
     }
 
@@ -88,16 +192,73 @@ app.post('/api/login', async (req, res) => {
       role: user.role
     };
 
+    // Log activity
+    logActivity(req, 'auth.login', { username });
     res.json({ success: true, message: 'Login successful', user: req.session.user });
   } catch (err) {
     console.error('❌ Login error:', err);
+    logActivity(req, 'auth.login.error', { username, error: err.message });
     res.status(500).json({ success: false, message: 'Database error' });
   }
 });
 
 // ✅ Current logged-in user
-app.get('/api/user', isAuthenticated, (req, res) => {
-  res.json({ success: true, user: req.session.user });
+app.get('/api/user', isAuthenticated, async (req, res) => {
+  try {
+    console.log('🔄 Fetching fresh user data for ID:', req.session.user.id);
+    
+    // Get complete user data including profile_photo from database
+    const [results] = await pool.query(`
+      SELECT user_ID, username, firstname, lastname, email, role, status, profile_photo
+      FROM system_user WHERE user_ID = ?
+    `, [req.session.user.id]);
+    
+    if (results.length > 0) {
+      // Fetch permissions from user_permissions table
+      const [permissionResults] = await pool.query(`
+        SELECT permission_name, is_allowed, access_level
+        FROM user_permissions 
+        WHERE user_id = ?
+      `, [req.session.user.id]);
+      
+      // Convert permissions to the expected format
+      const permissions = {};
+      permissionResults.forEach(row => {
+        permissions[row.permission_name] = {
+          allowed: row.is_allowed,
+          access: row.access_level
+        };
+      });
+      
+      const freshUserData = {
+        id: results[0].user_ID,
+        username: results[0].username,
+        firstname: results[0].firstname,
+        lastname: results[0].lastname,
+        email: results[0].email,
+        role: results[0].role,
+        status: results[0].status,
+        profile_photo: results[0].profile_photo || null,
+        permissions: permissions
+      };
+      
+      console.log('📋 Fresh user data from database:', freshUserData);
+      
+      // Update session with fresh data
+      req.session.user = freshUserData;
+      
+      // Avoid logging frequent user.me to reduce noise
+      res.json({ success: true, user: freshUserData });
+    } else {
+      console.log('❌ User not found in database');
+      // Avoid logging missing events for noise reduction
+      res.json({ success: true, user: req.session.user });
+    }
+  } catch (err) {
+    console.error('❌ Get user error:', err);
+    // Avoid logging frequent user.me errors to logs list
+    res.json({ success: true, user: req.session.user });
+  }
 });
 
 // ✅ Get all users
@@ -109,6 +270,7 @@ app.get('/api/users', async (req, res) => {
         username,
         firstname,
         lastname,
+        email,
         role,
         status
       FROM system_user
@@ -124,8 +286,11 @@ app.get('/api/users', async (req, res) => {
 
 // ✅ Logout
 app.get('/api/logout', (req, res) => {
+  const uid = req.session?.user?.id;
   req.session.destroy(err => {
     if (err) return res.status(500).json({ success: false, message: 'Logout failed' });
+    // Log logout (no session now; log without req.session.user)
+    try { logActivity({ headers: req.headers, socket: req.socket }, 'auth.logout', { userId: uid }); } catch {}
     res.clearCookie('connect.sid');
     res.json({ success: true, message: 'Logged out' });
   });
@@ -140,15 +305,114 @@ app.post('/api/change-password', isAuthenticated, async (req, res) => {
     const [results] = await pool.query(`SELECT password FROM system_user WHERE user_ID = ?`, [userId]);
     
     const user = results[0];
-    if (!user || user.password !== currentPassword) {
+    if (!user) {
+      return res.json({ success: false, message: 'User not found' });
+    }
+    
+    // Verify current password using bcrypt
+    const isCurrentPasswordValid = await verifyPassword(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
       return res.json({ success: false, message: 'Current password incorrect' });
     }
 
-    await pool.query(`UPDATE system_user SET password = ? WHERE user_ID = ?`, [newPassword, userId]);
+    // Hash the new password
+    const hashedNewPassword = await hashPassword(newPassword);
+    
+    await pool.query(`UPDATE system_user SET password = ? WHERE user_ID = ?`, [hashedNewPassword, userId]);
+    logActivity(req, 'user.password.change', {});
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     console.error('❌ Change password error:', err);
+    logActivity(req, 'user.password.change.error', { error: err.message });
     res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ✅ Update profile
+app.put('/api/update-profile', isAuthenticated, async (req, res) => {
+  const { firstname, lastname, email } = req.body;
+  const userId = req.session.user.id;
+
+  try {
+    const sql = `UPDATE system_user SET firstname = ?, lastname = ?, email = ? WHERE user_ID = ?`;
+    await pool.query(sql, [firstname, lastname, email, userId]);
+    
+    // Update session data
+    req.session.user.firstname = firstname;
+    req.session.user.lastname = lastname;
+    
+    logActivity(req, 'user.profile.update', { firstname, lastname, email });
+    res.json({ success: true, message: 'Profile updated successfully' });
+  } catch (err) {
+    console.error('❌ Update profile error:', err);
+    logActivity(req, 'user.profile.update.error', { error: err.message });
+    res.status(500).json({ success: false, message: 'Database error' });
+  }
+});
+
+// ✅ Upload profile photo
+const multer = require('multer');
+const path = require('path');
+
+// Configure multer for profile photo uploads
+const profilePhotoStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // Ensure the directory exists
+    const fs = require('fs');
+    const uploadDir = 'uploads/profiles/';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'profile-' + req.session.user.id + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const profilePhotoUpload = multer({
+  storage: profilePhotoStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Check file type
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
+
+app.post('/api/upload-profile-photo', isAuthenticated, profilePhotoUpload.single('profile_photo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const userId = req.session.user.id;
+    const filename = req.file.filename;
+
+    console.log(`📸 Uploading profile photo: ${filename} for user ${userId}`);
+
+    // Update user's profile photo in database
+    await pool.query(`UPDATE system_user SET profile_photo = ? WHERE user_ID = ?`, [filename, userId]);
+    
+    // Update session data
+    req.session.user.profile_photo = filename;
+    
+    console.log(`✅ Profile photo uploaded successfully: ${filename}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Profile photo uploaded successfully',
+      filename: filename
+    });
+  } catch (err) {
+    console.error('❌ Upload profile photo error:', err);
+    res.status(500).json({ success: false, message: 'Upload failed: ' + err.message });
   }
 });
 
@@ -157,9 +421,11 @@ app.post('/api/users/:id/deactivate', async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query(`UPDATE system_user SET status = 'deactivated' WHERE user_ID = ?`, [id]);
+    logActivity(req, 'user.deactivate', { targetUserId: id });
     res.json({ success: true });
   } catch (err) {
     console.error('❌ Deactivate user error:', err);
+    logActivity(req, 'user.deactivate.error', { targetUserId: id, error: err.message });
     res.status(500).json({ success: false, message: 'Deactivate failed' });
   }
 });
@@ -169,9 +435,11 @@ app.post('/api/users/:id/activate', async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query(`UPDATE system_user SET status = 'active' WHERE user_ID = ?`, [id]);
+    logActivity(req, 'user.activate', { targetUserId: id });
     res.json({ success: true });
   } catch (err) {
     console.error('❌ Activate user error:', err);
+    logActivity(req, 'user.activate.error', { targetUserId: id, error: err.message });
     res.status(500).json({ success: false, message: 'Activate failed' });
   }
 });
@@ -181,22 +449,90 @@ app.delete('/api/users/:id', async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query(`DELETE FROM system_user WHERE user_ID = ?`, [id]);
+    logActivity(req, 'user.delete', { targetUserId: id });
     res.json({ success: true });
   } catch (err) {
     console.error('❌ Delete user error:', err);
+    logActivity(req, 'user.delete.error', { targetUserId: id, error: err.message });
     res.status(500).json({ success: false, message: 'Delete failed' });
   }
 });
 
+// ✅ Get user permissions
+app.get('/api/users/:id/permissions', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const [results] = await pool.query(`
+      SELECT permission_name, is_allowed, access_level
+      FROM user_permissions 
+      WHERE user_id = ?
+    `, [userId]);
+    
+    const permissions = {};
+    results.forEach(row => {
+      permissions[row.permission_name] = {
+        allowed: row.is_allowed,
+        access: row.access_level
+      };
+    });
+    
+    res.json({ success: true, permissions });
+  } catch (err) {
+    console.error('❌ Get permissions error:', err);
+    res.status(500).json({ success: false, message: 'Error fetching permissions' });
+  }
+});
+
+// ✅ Update user permissions
+app.put('/api/users/:id/permissions', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { permissions } = req.body;
+    
+    // Delete existing permissions
+    await pool.query('DELETE FROM user_permissions WHERE user_id = ?', [userId]);
+    
+    // Insert new permissions
+    if (permissions && typeof permissions === 'object') {
+      for (const [permissionName, config] of Object.entries(permissions)) {
+        if (config && typeof config === 'object') {
+          await pool.query(`
+            INSERT INTO user_permissions (user_id, permission_name, is_allowed, access_level)
+            VALUES (?, ?, ?, ?)
+          `, [userId, permissionName, config.allowed, config.access]);
+        }
+      }
+    }
+    
+    // Update permissions JSON in system_user table
+    await pool.query(`
+      UPDATE system_user 
+      SET permissions = ? 
+      WHERE user_ID = ?
+    `, [JSON.stringify(permissions), userId]);
+    
+    logActivity(req, 'user.permissions.update', { targetUserId: userId, permissions });
+    res.json({ success: true, message: 'Permissions updated successfully' });
+  } catch (err) {
+    console.error('❌ Update permissions error:', err);
+    logActivity(req, 'user.permissions.update.error', { targetUserId: req.params.id, error: err.message });
+    res.status(500).json({ success: false, message: 'Error updating permissions' });
+  }
+});
+
 app.use('/api/slots', require('./routes/slots'));
+app.use('/api', require('./routes/slots')); // Add check-in routes
 app.use('/api/activities', require('./routes/activities'));
 app.use('/api/cultural-objects', require('./routes/cultural-objects'));
+app.use('/api/visitors', require('./routes/visitors'));
+app.use('/api/additional-visitors', require('./routes/additional-visitors'));
 
 const archiveRoutes = require('./routes/archive');
 app.use('/api/archives', archiveRoutes);
 app.use('/uploads/archives', express.static(__dirname + '/uploads/archives'));
 
 app.use('/api/donations', require('./routes/donations'));
+app.use('/api/reports', require('./routes/reports'));
 
 const statsRouter = require('./routes/stats');
 app.use('/api/stats', statsRouter);
@@ -205,6 +541,53 @@ app.get('/', (req, res) => {
   res.send('Backend is running!');
 });
 
-app.listen(PORT, () => {
+// Activity log endpoints
+app.get('/api/activity-logs', isAuthenticated, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '10', 10), 500);
+    const offset = Math.max(parseInt(req.query.offset || '0', 10), 0);
+    const importantOnly = (req.query.important === '1' || req.query.important === 'true');
+    let sql = `SELECT l.id, l.user_id, u.username, u.firstname, u.lastname, u.role, l.action, l.details, l.ip_address, l.user_agent, l.created_at
+               FROM user_activity_logs l
+               LEFT JOIN system_user u ON u.user_ID = l.user_id`;
+    const params = [];
+    if (importantOnly) {
+      sql += ` WHERE l.action NOT IN ('user.me','user.list')`;
+    }
+    sql += ` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+    const [rows] = await pool.query(sql, params);
+    res.json({ success: true, logs: rows });
+  } catch (err) {
+    console.error('❌ Fetch logs error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch logs' });
+  }
+});
+
+// Clear logs (admin only). Optional: olderThanDate=YYYY-MM-DD to clear older logs
+app.delete('/api/activity-logs', isAuthenticated, async (req, res) => {
+  try {
+    if (req.session?.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Only admin can clear logs' });
+    }
+    const olderThanDate = req.query.olderThanDate;
+    let sql = 'DELETE FROM user_activity_logs';
+    const params = [];
+    if (olderThanDate) {
+      sql += ' WHERE created_at < ?';
+      params.push(olderThanDate);
+    }
+    const [result] = await pool.query(sql, params);
+    try { logActivity(req, 'logs.clear', { olderThanDate: olderThanDate || null, affected: result.affectedRows }); } catch {}
+    res.json({ success: true, message: 'Logs cleared', affected: result.affectedRows });
+  } catch (err) {
+    console.error('❌ Clear logs error:', err);
+    res.status(500).json({ success: false, message: 'Failed to clear logs' });
+  }
+});
+
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`🌐 External access: http://YOUR_COMPUTER_IP:${PORT}`);
 });

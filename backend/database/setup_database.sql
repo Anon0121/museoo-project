@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS system_user (
     username VARCHAR(50) UNIQUE NOT NULL,
     firstname VARCHAR(50) NOT NULL,
     lastname VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     role ENUM('admin', 'user') DEFAULT 'user',
     status ENUM('active', 'deactivated') DEFAULT 'active',
@@ -23,10 +24,11 @@ CREATE TABLE IF NOT EXISTS bookings (
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
     type ENUM('individual', 'group') NOT NULL,
-    status ENUM('pending', 'visited', 'cancelled') DEFAULT 'pending',
+    status ENUM('pending', 'approved', 'checked-in', 'cancelled') DEFAULT 'pending',
     date DATE NOT NULL,
     time_slot VARCHAR(20) NOT NULL,
     total_visitors INT NOT NULL,
+    checkin_time TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -87,6 +89,46 @@ CREATE TABLE IF NOT EXISTS images (
     url VARCHAR(500) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE
+);
+
+-- Create archives table for digital archive
+CREATE TABLE IF NOT EXISTS archives (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    date DATE,
+    type VARCHAR(100) NOT NULL,
+    tags VARCHAR(500),
+    file_url VARCHAR(500) NOT NULL,
+    uploaded_by VARCHAR(100) DEFAULT 'admin',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create donations table
+CREATE TABLE IF NOT EXISTS donations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    donor_name VARCHAR(255) NOT NULL,
+    donor_email VARCHAR(255) NOT NULL,
+    donor_contact VARCHAR(100),
+    type ENUM('monetary', 'artifact', 'document', 'loan') NOT NULL,
+    date_received DATE,
+    notes TEXT,
+    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create donation_details table
+CREATE TABLE IF NOT EXISTS donation_details (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    donation_id INT NOT NULL,
+    amount DECIMAL(15,2),
+    method VARCHAR(100),
+    item_description TEXT,
+    estimated_value DECIMAL(15,2),
+    `condition` VARCHAR(100),
+    loan_start_date DATE,
+    loan_end_date DATE,
+    FOREIGN KEY (donation_id) REFERENCES donations(id) ON DELETE CASCADE
 );
 
 -- Main table: general info

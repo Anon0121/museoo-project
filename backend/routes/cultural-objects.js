@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const pool = require('../db');
+const { logActivity } = require('../utils/activityLogger');
 const router = express.Router();
 
 const upload = multer({ dest: 'uploads/' });
@@ -50,6 +51,7 @@ router.post('/', upload.array('images'), async (req, res) => {
     }
 
     await conn.commit();
+    try { await logActivity(req, 'cobject.create', { culturalObjectId: objectId, name }); } catch {}
     res.json({ success: true, culturalObjectId: objectId });
   } catch (err) {
     await conn.rollback();
@@ -157,6 +159,7 @@ router.put('/:id', upload.array('images'), async (req, res) => {
     }
 
     await conn.commit();
+    try { await logActivity(req, 'cobject.update', { culturalObjectId: id }); } catch {}
     res.json({ success: true });
   } catch (err) {
     await conn.rollback();
@@ -177,6 +180,7 @@ router.delete('/:id', async (req, res) => {
     await conn.query('DELETE FROM object_details WHERE cultural_object_id = ?', [id]);
     await conn.query('DELETE FROM cultural_objects WHERE id = ?', [id]);
     await conn.commit();
+    try { await logActivity(req, 'cobject.delete', { culturalObjectId: id }); } catch {}
     res.json({ success: true });
   } catch (err) {
     await conn.rollback();

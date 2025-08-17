@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const pool = require('../db');
+const { logActivity } = require('../utils/activityLogger');
 const router = express.Router();
 
 const upload = multer({ dest: 'uploads/' }); // images will be saved in /uploads
@@ -41,6 +42,7 @@ router.post('/', upload.array('images'), async (req, res) => {
       }
     }
 
+    try { await logActivity(req, 'activity.create', { activityId, type, title }); } catch {}
     res.json({ success: true, activityId });
   } catch (err) {
     console.error('Error creating activity:', err);
@@ -123,6 +125,7 @@ router.delete('/:id', async (req, res) => {
     await pool.query('DELETE FROM exhibit_details WHERE activity_id = ?', [id]);
     // Delete from activities
     await pool.query('DELETE FROM activities WHERE id = ?', [id]);
+    try { await logActivity(req, 'activity.delete', { activityId: id }); } catch {}
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting activity:', err);
