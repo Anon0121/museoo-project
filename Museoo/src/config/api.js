@@ -10,6 +10,14 @@ const getBackendURL = () => {
     return 'https://museoo-backend.vercel.app';
   }
 
+  // If accessing from ngrok, use ngrok backend
+  if (window.location.hostname.includes('ngrok.io') || window.location.hostname.includes('ngrok-free.app')) {
+    // Extract the ngrok URL and use it for backend
+    const currentHost = window.location.hostname;
+    const currentProtocol = window.location.protocol;
+    return `${currentProtocol}//${currentHost.replace('5173', '5000')}`;
+  }
+
   // If accessing from external IP, use the same IP for backend
   return `http://${window.location.hostname}:5000`;
 };
