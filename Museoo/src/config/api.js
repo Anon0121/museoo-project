@@ -2,11 +2,16 @@
 const getBackendURL = () => {
   // If accessing from localhost, use localhost
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:3000';
+    return 'http://localhost:5000';
+  }
+
+  // If accessing from Vercel frontend, use Vercel backend
+  if (window.location.hostname === 'museoo-project.vercel.app') {
+    return 'https://museoo-backend.vercel.app';
   }
 
   // If accessing from external IP, use the same IP for backend
-  return `http://${window.location.hostname}:3000`;
+  return `http://${window.location.hostname}:5000`;
 };
 
 export const API_BASE_URL = getBackendURL();
