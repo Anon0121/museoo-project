@@ -16,7 +16,7 @@ const GroupMemberForm = () => {
     gender: "", // Remove default - force user to choose
     address: "",
     email: "",
-    nationality: "", // Remove default - force user to choose
+    visitorType: "", // Remove default - force user to choose
     institution: "",
     purpose: "educational"
   });
@@ -35,7 +35,7 @@ const GroupMemberForm = () => {
             gender: visitor.gender || "male",
             address: visitor.address || "",
             email: visitor.email || "",
-            nationality: visitor.nationality || "",
+            visitorType: visitor.visitorType || "",
             institution: "",
             purpose: visitor.purpose || "educational"
           });
@@ -75,7 +75,7 @@ const GroupMemberForm = () => {
         gender: memberInfo.gender,
         address: memberInfo.address,
         email: memberInfo.email,
-        nationality: memberInfo.nationality,
+        visitorType: memberInfo.visitorType,
         institution: memberInfo.institution,
         purpose: memberInfo.purpose
       });
@@ -191,38 +191,64 @@ const GroupMemberForm = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Gender *
                   </label>
-                  <select
-                    name="gender"
-                    value={memberInfo.gender}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Pick your gender</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="lgbt">LGBT</option>
-                    <option value="prefer_not_to_say">Prefer not to say</option>
-                  </select>
+                  <div className="flex flex-wrap gap-4">
+                    {[
+                      { value: "male", label: "Male" },
+                      { value: "female", label: "Female" },
+                      { value: "lgbtq", label: "LGBTQ+" }
+                    ].map((option) => (
+                      <label key={option.value} className="relative flex items-center cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="gender"
+                          value={option.value}
+                          checked={memberInfo.gender === option.value}
+                          onChange={handleInputChange}
+                          required
+                          className="sr-only peer"
+                        />
+                        <div className="w-5 h-5 border-2 border-gray-300 rounded-full peer-checked:border-blue-500 peer-checked:bg-blue-500 peer-focus:ring-2 peer-focus:ring-blue-200 transition-all duration-200 group-hover:border-blue-400">
+                          <div className="w-2 h-2 bg-white rounded-full m-auto mt-1.5 peer-checked:opacity-100 opacity-0 transition-opacity duration-200"></div>
+                        </div>
+                        <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors duration-200">
+                          {option.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Nationality */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nationality *
-                  </label>
-                  <select
-                    name="nationality"
-                    value={memberInfo.nationality}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Choose your nationality</option>
-                    <option value="local">Local</option>
-                    <option value="foreign">Foreign</option>
-                  </select>
-                </div>
+                {/* Visitor Type */}
+                                 {/* Visitor Type Radio Buttons */}
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-3">
+                     Visitor Type *
+                   </label>
+                   <div className="grid grid-cols-2 gap-4">
+                     {[
+                       { value: "local", label: "Local" },
+                       { value: "foreign", label: "Foreign" }
+                     ].map((option) => (
+                       <label key={option.value} className="relative flex items-center cursor-pointer group">
+                         <input
+                           type="radio"
+                           name="visitorType"
+                           value={option.value}
+                           checked={memberInfo.visitorType === option.value}
+                           onChange={handleInputChange}
+                           required
+                           className="sr-only peer"
+                         />
+                         <div className="w-5 h-5 border-2 border-gray-300 rounded-full peer-checked:border-blue-500 peer-checked:bg-blue-500 peer-focus:ring-2 peer-focus:ring-blue-200 transition-all duration-200 group-hover:border-blue-400">
+                           <div className="w-2 h-2 bg-white rounded-full m-auto mt-1.5 peer-checked:opacity-100 opacity-0 transition-opacity duration-200"></div>
+                         </div>
+                         <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors duration-200">
+                           {option.label}
+                         </span>
+                       </label>
+                     ))}
+                   </div>
+                 </div>
 
                 {/* Email */}
                 <div className="md:col-span-2">

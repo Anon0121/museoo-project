@@ -19,12 +19,13 @@ const Donation = () => {
     date_received: new Date().toISOString().split('T')[0],
     notes: "",
     amount: "",
-    method: "",
+    payment_proof: null,
     item_description: "",
     estimated_value: "",
     condition: "",
     loan_start_date: "",
     loan_end_date: "",
+    legal_documents: null,
   });
 
   const [formLoading, setFormLoading] = useState(false);
@@ -64,34 +65,72 @@ const Donation = () => {
     }
   };
 
+  const handleDelete = async (donationId, donorName) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the donation from "${donorName}"?\n\nThis action cannot be undone and will permanently remove:\n• All donation details\n• Related documents\n• Workflow history\n• Acknowledgments\n• Requirements\n• Visitor submission data\n• Public display settings`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      const response = await axios.delete(`http://localhost:3000/api/donations/${donationId}`);
+      if (response.data.success) {
+        alert('✅ Donation deleted successfully!');
+        fetchDonations(); // Refresh the list
+      }
+    } catch (error) {
+      console.error('Error deleting donation:', error);
+      alert('❌ Error deleting donation. Please try again.');
+    }
+  };
+
+  const handleReject = async (donationId) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to reject this donation?\n\nThis will mark the donation as rejected and it will no longer be eligible for approval.'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      const response = await axios.post(`http://localhost:3000/api/donations/${donationId}/reject`);
+      if (response.data.success) {
+        alert('✅ Donation rejected successfully!');
+        fetchDonations(); // Refresh the list
+      }
+    } catch (error) {
+      console.error('Error rejecting donation:', error);
+      alert('❌ Error rejecting donation. Please try again.');
+    }
+  };
+
   const previewAppreciationLetter = (donation) => {
-    const donationTypeLabels = {
-      monetary: 'Monetary Donation',
-      artifact: 'Artifact/Historical Item',
-      document: 'Document/Archive',
-      loan: 'Loan (Temporary)'
-    };
+         const donationTypeLabels = {
+       monetary: 'Monetary Donation',
+       artifact: 'Artifact/Historical Item',
+       loan: 'Loan (Temporary)'
+     };
 
     const formatDonationDetails = () => {
       let details = [];
       
       if (donation.type === 'monetary' && donation.amount) {
         details.push(`Amount: ₱${parseFloat(donation.amount).toLocaleString()}`);
-      }
-      
-      if (donation.method) {
-        details.push(`Payment Method: ${donation.method}`);
+        details.push(`Payment Method: Cash (with proof of payment)`);
       }
       
       if (donation.item_description) {
         details.push(`Item Description: ${donation.item_description}`);
       }
       
-      if (donation.estimated_value) {
-        details.push(`Estimated Value: ₱${parseFloat(donation.estimated_value).toLocaleString()}`);
-      }
-      
-      return details;
+          if (donation.estimated_value) {
+      details.push(`Estimated Value: ₱${parseFloat(donation.estimated_value).toLocaleString()}`);
+    }
+
+         if (donation.type === 'artifact') {
+       details.push(`Legal Documentation: Ownership certificates and provenance documents provided`);
+     }
+    
+    return details;
     };
 
     const htmlContent = `
@@ -217,35 +256,75 @@ const Donation = () => {
     }));
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData(prev => ({
+        ...prev,
+        payment_proof: file
+      }));
+    }
+  };
+
+  const handleLegalDocumentsChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData(prev => ({
+        ...prev,
+        legal_documents: file
+      }));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormLoading(true);
 
     try {
-      const res = await axios.post("http://localhost:3000/api/donations", formData);
+      const formDataToSend = new FormData();
+      
+      // Add all form fields
+      Object.keys(formData).forEach(key => {
+        if (key === 'payment_proof' && formData[key]) {
+          formDataToSend.append('payment_proof', formData[key]);
+        } else if (key === 'legal_documents' && formData[key]) {
+          formDataToSend.append('legal_documents', formData[key]);
+        } else if (key !== 'payment_proof' && key !== 'legal_documents') {
+          formDataToSend.append(key, formData[key]);
+        }
+      });
+
+      const res = await axios.post("http://localhost:3000/api/donations", formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
       if (res.data.success) {
         alert("Donation recorded successfully!");
-        setFormData({
-          donor_name: "",
-          donor_email: "",
-          donor_contact: "",
-          type: "monetary",
-          date_received: new Date().toISOString().split('T')[0],
-          notes: "",
-          amount: "",
-          method: "",
-          item_description: "",
-          estimated_value: "",
-          condition: "",
-          loan_start_date: "",
-          loan_end_date: "",
-        });
+                 setFormData({
+           donor_name: "",
+           donor_email: "",
+           donor_contact: "",
+           type: "monetary",
+           date_received: new Date().toISOString().split('T')[0],
+           notes: "",
+           amount: "",
+           payment_proof: null,
+           item_description: "",
+           estimated_value: "",
+           condition: "",
+           loan_start_date: "",
+           loan_end_date: "",
+           legal_documents: null,
+         });
         setShowForm(false);
         fetchDonations();
       } else {
         alert("Failed to record donation.");
       }
     } catch (err) {
+      console.error("Error saving donation:", err);
       alert("Error saving donation.");
     }
     setFormLoading(false);
@@ -270,20 +349,26 @@ const Donation = () => {
         </div>
         <div>
           <label className="block text-[#2e2b41] font-semibold mb-2">
-            Payment Method
+            Payment Proof (Image) *
           </label>
-          <select
-            name="method"
-            value={formData.method}
-            onChange={handleChange}
+          <input
+            type="file"
+            name="payment_proof"
+            onChange={handleFileChange}
+            accept="image/*"
             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-          >
-            <option value="">Select method</option>
-            <option value="cash">Cash</option>
-            <option value="bank_transfer">Bank Transfer</option>
-            <option value="check">Check</option>
-            <option value="online">Online Payment</option>
-          </select>
+            required
+          />
+          <p className="text-sm text-gray-500 mt-1">
+            Upload a photo of the cash payment as proof
+          </p>
+          {formData.payment_proof && (
+            <div className="mt-2">
+              <p className="text-sm text-green-600">
+                ✓ File selected: {formData.payment_proof.name}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -320,23 +405,48 @@ const Donation = () => {
           />
         </div>
       </div>
-      <div>
-        <label className="block text-[#2e2b41] font-semibold mb-2">
-          Condition
-        </label>
-        <select
-          name="condition"
-          value={formData.condition}
-          onChange={handleChange}
-          className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-        >
-          <option value="">Select condition</option>
-          <option value="excellent">Excellent</option>
-          <option value="good">Good</option>
-          <option value="fair">Fair</option>
-          <option value="poor">Poor</option>
-          <option value="needs_restoration">Needs Restoration</option>
-        </select>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[#2e2b41] font-semibold mb-2">
+            Condition
+          </label>
+          <select
+            name="condition"
+            value={formData.condition}
+            onChange={handleChange}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+          >
+            <option value="">Select condition</option>
+            <option value="excellent">Excellent</option>
+            <option value="good">Good</option>
+            <option value="fair">Fair</option>
+            <option value="poor">Poor</option>
+            <option value="needs_restoration">Needs Restoration</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[#2e2b41] font-semibold mb-2">
+            Legal Documents (PDF/Image) *
+          </label>
+          <input
+            type="file"
+            name="legal_documents"
+            onChange={handleLegalDocumentsChange}
+            accept=".pdf,image/*"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+            required
+          />
+          <p className="text-sm text-gray-500 mt-1">
+            Upload ownership certificates, provenance documents, or legal papers
+          </p>
+          {formData.legal_documents && (
+            <div className="mt-2">
+              <p className="text-sm text-green-600">
+                ✓ File selected: {formData.legal_documents.name}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
@@ -384,15 +494,14 @@ const Donation = () => {
     return badges[status] || "bg-gray-100 text-gray-800 border border-gray-200";
   };
 
-  const getTypeBadge = (type) => {
-    const badges = {
-      monetary: "bg-blue-100 text-blue-800 border border-blue-200",
-      artifact: "bg-purple-100 text-purple-800 border border-purple-200",
-      document: "bg-indigo-100 text-indigo-800 border border-indigo-200",
-      loan: "bg-orange-100 text-orange-800 border border-orange-200"
-    };
-    return badges[type] || "bg-gray-100 text-gray-800 border border-gray-200";
-  };
+     const getTypeBadge = (type) => {
+     const badges = {
+       monetary: "bg-blue-100 text-blue-800 border border-blue-200",
+       artifact: "bg-purple-100 text-purple-800 border border-purple-200",
+       loan: "bg-orange-100 text-orange-800 border border-orange-200"
+     };
+     return badges[type] || "bg-gray-100 text-gray-800 border border-gray-200";
+   };
 
   if (loading) {
     return (
@@ -518,27 +627,25 @@ const Donation = () => {
                 <label className="block text-[#2e2b41] font-semibold mb-2">
                   Donation Type *
                 </label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-                  required
-                >
-                  <option value="monetary">Monetary Donation</option>
-                  <option value="artifact">Artifact/Historical Item</option>
-                  <option value="document">Document/Archive</option>
-                  <option value="loan">Loan (Temporary)</option>
-                </select>
+                                 <select
+                   name="type"
+                   value={formData.type}
+                   onChange={handleChange}
+                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                   required
+                 >
+                   <option value="monetary">Monetary Donation</option>
+                   <option value="artifact">Artifact/Historical Item</option>
+                   <option value="loan">Loan (Temporary)</option>
+                 </select>
               </div>
 
-              {/* Conditional Fields Based on Type */}
-              <div className="mt-6">
-                {formData.type === 'monetary' && renderMonetaryFields()}
-                {formData.type === 'artifact' && renderArtifactFields()}
-                {formData.type === 'document' && renderArtifactFields()}
-                {formData.type === 'loan' && renderLoanFields()}
-              </div>
+                             {/* Conditional Fields Based on Type */}
+               <div className="mt-6">
+                 {formData.type === 'monetary' && renderMonetaryFields()}
+                 {formData.type === 'artifact' && renderArtifactFields()}
+                 {formData.type === 'loan' && renderLoanFields()}
+               </div>
             </div>
 
             {/* Additional Notes */}
@@ -639,15 +746,14 @@ const Donation = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${getTypeBadge(donation.type)}`}>
-                      <i className={`fa-solid ${
-                        donation.type === 'monetary' ? 'fa-money-bill' :
-                        donation.type === 'artifact' ? 'fa-landmark' :
-                        donation.type === 'document' ? 'fa-file-alt' :
-                        'fa-clock'
-                      } mr-1`}></i>
-                      {donation.type}
-                    </span>
+                                         <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${getTypeBadge(donation.type)}`}>
+                       <i className={`fa-solid ${
+                         donation.type === 'monetary' ? 'fa-money-bill' :
+                         donation.type === 'artifact' ? 'fa-landmark' :
+                         'fa-clock'
+                       } mr-1`}></i>
+                       {donation.type}
+                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-[#2e2b41]">
@@ -657,9 +763,7 @@ const Donation = () => {
                       {donation.item_description && (
                         <div className="truncate max-w-xs text-gray-600">{donation.item_description}</div>
                       )}
-                      {donation.method && (
-                        <div className="text-xs text-gray-500">Method: {donation.method}</div>
-                      )}
+                      
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -702,17 +806,51 @@ const Donation = () => {
                             <i className="fa-solid fa-eye mr-1"></i>
                             Preview Letter
                           </button>
+                          <button
+                            onClick={() => handleReject(donation.id)}
+                            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors text-xs font-semibold mr-2"
+                            title="Reject donation"
+                          >
+                            <i className="fa-solid fa-times mr-1"></i>
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => handleDelete(donation.id, donation.donor_name)}
+                            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors text-xs font-semibold"
+                            title="Delete donation"
+                          >
+                            <i className="fa-solid fa-trash mr-1"></i>
+                            Delete
+                          </button>
                         </>
                       )}
                       {donation.status === 'approved' && (
-                        <button
-                          onClick={() => downloadAppreciationLetter(donation.id, donation.donor_name)}
-                          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors text-xs font-semibold"
-                        >
-                          <i className="fa-solid fa-download mr-1"></i>
-                          Download Letter
-                        </button>
+                        <>
+                          <button
+                            onClick={() => downloadAppreciationLetter(donation.id, donation.donor_name)}
+                            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors text-xs font-semibold mr-2"
+                          >
+                            <i className="fa-solid fa-download mr-1"></i>
+                            Download Letter
+                          </button>
+                          <button
+                            onClick={() => handleReject(donation.id)}
+                            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors text-xs font-semibold mr-2"
+                            title="Reject donation"
+                          >
+                            <i className="fa-solid fa-times mr-1"></i>
+                            Reject
+                          </button>
+                        </>
                       )}
+                      <button
+                        onClick={() => handleDelete(donation.id, donation.donor_name)}
+                        className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors text-xs font-semibold"
+                        title="Delete donation"
+                      >
+                        <i className="fa-solid fa-trash mr-1"></i>
+                        Delete
+                      </button>
                     </td>
                 </tr>
               ))}

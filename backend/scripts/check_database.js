@@ -1,113 +1,62 @@
 const mysql = require('mysql2/promise');
 
-// Database configuration
-const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'museosmart'
-};
-
 async function checkDatabase() {
   let connection;
   
   try {
-    console.log('🔍 Checking current database structure...');
-    
     // Create connection
-    connection = await mysql.createConnection(dbConfig);
-    console.log('✅ Connected to museosmart database');
+    connection = await mysql.createConnection({
+      host: 'localhost',
+      user: 'root',
+      password: '',
+      database: 'museosmart'
+    });
+
+    console.log('🔗 Connected to database successfully');
+
+    // Check if event_registrations table exists
+    const [tables] = await connection.execute('SHOW TABLES LIKE "event_registrations"');
+    console.log('✅ Event registrations table exists:', tables.length > 0);
+
+    // Check activities table structure
+    const [columns] = await connection.execute('DESCRIBE activities');
+    const hasCapacity = columns.some(col => col.Field === 'max_capacity');
+    const hasCurrentRegistrations = columns.some(col => col.Field === 'current_registrations');
     
-    // Get all tables
-    const [tables] = await connection.execute('SHOW TABLES');
-    console.log('\n📊 Current tables in database:');
-    
-    if (tables.length === 0) {
-      console.log('  ❌ No tables found in database');
-    } else {
-      tables.forEach((table, index) => {
-        const tableName = Object.values(table)[0];
-        console.log(`  ${index + 1}. ✅ ${tableName}`);
+    console.log('✅ Activities table has max_capacity field:', hasCapacity);
+    console.log('✅ Activities table has current_registrations field:', hasCurrentRegistrations);
+
+    // Check if there are any exhibits
+    const [exhibits] = await connection.execute('SELECT COUNT(*) as count FROM activities WHERE type = "exhibit"');
+    console.log('📊 Total exhibits in database:', exhibits[0].count);
+
+    // Check if there are any registrations
+    const [registrations] = await connection.execute('SELECT COUNT(*) as count FROM event_registrations');
+    console.log('📊 Total registrations in database:', registrations[0].count);
+
+    // Show sample data
+    if (exhibits[0].count > 0) {
+      const [sampleExhibits] = await connection.execute('SELECT id, title, max_capacity, current_registrations FROM activities WHERE type = "exhibit" LIMIT 3');
+      console.log('📋 Sample exhibits:');
+      sampleExhibits.forEach(exhibit => {
+        console.log(`   - ID: ${exhibit.id}, Title: ${exhibit.title}, Capacity: ${exhibit.max_capacity || 'Not set'}, Registrations: ${exhibit.current_registrations || 0}`);
       });
     }
-    
-    // Check system_user table specifically
-    if (tables.some(table => Object.values(table)[0] === 'system_user')) {
-      console.log('\n👤 system_user table details:');
-      
-      // Show table structure
-      const [structure] = await connection.execute('DESCRIBE system_user');
-      console.log('  📋 Table structure:');
-      structure.forEach(field => {
-        console.log(`    - ${field.Field}: ${field.Type} ${field.Null === 'NO' ? 'NOT NULL' : 'NULL'}`);
+
+    if (registrations[0].count > 0) {
+      const [sampleRegistrations] = await connection.execute('SELECT id, firstname, lastname, email, visitor_type, status FROM event_registrations LIMIT 3');
+      console.log('📋 Sample registrations:');
+      sampleRegistrations.forEach(reg => {
+        console.log(`   - ID: ${reg.id}, Name: ${reg.firstname} ${reg.lastname}, Email: ${reg.email}, Type: ${reg.visitor_type}, Status: ${reg.status}`);
       });
-      
-      // Show user count
-      const [userCount] = await connection.execute('SELECT COUNT(*) as count FROM system_user');
-      console.log(`  📊 Total users: ${userCount[0].count}`);
-      
-      // Show admin user
-      const [adminUser] = await connection.execute(`
-        SELECT user_ID, username, firstname, lastname, email, role, status 
-        FROM system_user WHERE username = 'admin'
-      `);
-      
-      if (adminUser.length > 0) {
-        console.log('  👑 Admin user:');
-        console.log(`    - Username: ${adminUser[0].username}`);
-        console.log(`    - Email: ${adminUser[0].email || 'N/A'}`);
-        console.log(`    - Role: ${adminUser[0].role}`);
-        console.log(`    - Status: ${adminUser[0].status}`);
-      } else {
-        console.log('  ❌ Admin user not found');
-      }
-    } else {
-      console.log('\n❌ system_user table not found');
     }
-    
-    // Expected tables list
-    const expectedTables = [
-      'system_user',
-      'bookings', 
-      'visitors',
-      'activities',
-      'event_details',
-      'exhibit_details',
-      'images',
-      'archives',
-      'donations',
-      'donation_details',
-      'cultural_objects',
-      'object_details'
-    ];
-    
-    const existingTables = tables.map(table => Object.values(table)[0]);
-    const missingTables = expectedTables.filter(table => !existingTables.includes(table));
-    const extraTables = existingTables.filter(table => !expectedTables.includes(table));
-    
-    if (missingTables.length > 0) {
-      console.log('\n⚠️  Missing expected tables:');
-      missingTables.forEach(table => console.log(`  ❌ ${table}`));
-    }
-    
-    if (extraTables.length > 0) {
-      console.log('\n📝 Extra tables found:');
-      extraTables.forEach(table => console.log(`  ℹ️  ${table}`));
-    }
-    
-    if (missingTables.length === 0 && extraTables.length === 0) {
-      console.log('\n🎉 Database structure is complete!');
-    }
-    
+
   } catch (error) {
     console.error('❌ Database check failed:', error.message);
-    if (error.code === 'ER_BAD_DB_ERROR') {
-      console.log('💡 Database "museosmart" does not exist. Run setup_complete_database.js to create it.');
-    }
   } finally {
     if (connection) {
       await connection.end();
-      console.log('\n🔌 Database connection closed');
+      console.log('🔌 Database connection closed');
     }
   }
 }

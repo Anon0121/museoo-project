@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [tailwindcss(), react()],
   server: {
     host: '0.0.0.0', // Allow external access
-    port: 5173, // Default Vite port
+    port: 5173, // Use standard Vite port
     strictPort: true, // Use exact port
     https: (() => {
       try {

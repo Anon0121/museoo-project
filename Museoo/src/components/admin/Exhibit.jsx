@@ -15,7 +15,7 @@ const Exhibit = () => {
   const [form, setForm] = useState({
     title: "",
     description: "",
-    images: [],
+    image: null,
     startDate: "",
     endDate: "",
     location: "",
@@ -25,42 +25,70 @@ const Exhibit = () => {
   const [modalExhibit, setModalExhibit] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState('upcoming'); // Add tab state
+  const [activeTab, setActiveTab] = useState('upcoming');
+  const [imagePreview, setImagePreview] = useState(null);
+
 
   const handleChange = (e) => {
     const { name, value, files } = e.target;
-    if (name === "images") {
-      setForm((prev) => ({
-        ...prev,
-        images: Array.from(files),
-      }));
+    if (name === "image") {
+      const file = files[0];
+      if (file) {
+        setForm(prev => ({
+          ...prev,
+          image: file
+        }));
+        setImagePreview(URL.createObjectURL(file));
+      }
     } else {
-      setForm((prev) => ({
+      setForm(prev => ({
         ...prev,
         [name]: value,
       }));
     }
   };
 
+  // Clean up preview URL when component unmounts
+  useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
+  const clearImage = () => {
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setImagePreview(null);
+    setForm(prev => ({
+      ...prev,
+      image: null
+    }));
+  };
+
   const fetchExhibits = () => {
     fetch('http://localhost:3000/api/activities/exhibits')
       .then(res => res.json())
       .then(data => {
-        // Map snake_case to camelCase
         const mapped = data.map(ex => ({
           ...ex,
           startDate: ex.start_date,
           endDate: ex.end_date,
-          images: ex.images,
+          image: ex.images && ex.images.length > 0 ? ex.images[0] : null,
           location: ex.location,
           curator: ex.curator,
           category: ex.category,
-          // Optionally remove snake_case fields if you want
+          maxCapacity: ex.max_capacity || 50,
+          currentRegistrations: ex.current_registrations || 0,
         }));
         setExhibits(mapped);
       })
       .catch(() => setExhibits([]));
   };
+
+
 
   useEffect(() => {
     fetchExhibits();
@@ -84,7 +112,7 @@ const Exhibit = () => {
 
     setSubmitting(true);
 
-    // 1. Build FormData
+    // Build FormData
     const formData = new FormData();
     formData.append('title', form.title);
     formData.append('description', form.description);
@@ -92,13 +120,13 @@ const Exhibit = () => {
     formData.append('start_date', form.startDate);
     formData.append('end_date', form.endDate);
     formData.append('location', form.location);
-    formData.append('curator', form.curator);
-    formData.append('category', form.category);
-    for (const file of form.images) {
-      formData.append('images', file);
+         formData.append('curator', form.curator);
+     formData.append('category', form.category);
+     if (form.image) {
+      formData.append('images', form.image);
     }
 
-    // 2. Send to backend
+    // Send to backend
     try {
       const res = await fetch('http://localhost:3000/api/activities', {
         method: 'POST',
@@ -107,16 +135,17 @@ const Exhibit = () => {
       const data = await res.json();
       if (data.success) {
         alert('Exhibit added successfully!');
-        setForm({
-          title: "",
-          description: "",
-          images: [],
-          startDate: "",
-          endDate: "",
-          location: "",
-          curator: "",
-          category: "",
-        });
+                 setForm({
+           title: "",
+           description: "",
+           image: null,
+           startDate: "",
+           endDate: "",
+           location: "",
+           curator: "",
+           category: "",
+         });
+        clearImage();
         e.target.reset();
         setShowForm(false);
         fetchExhibits();
@@ -135,7 +164,7 @@ const Exhibit = () => {
     setExhibits(exhibits.filter((item) => item.id !== id));
   };
 
-  // Categorize exhibits (with ongoing state)
+  // Categorize exhibits
   const now = new Date();
   const upcoming = exhibits.filter(
     (ex) => new Date(ex.startDate) > now
@@ -291,17 +320,46 @@ const Exhibit = () => {
 
             <div>
               <label className="block text-[#2e2b41] font-semibold mb-2 text-sm md:text-base">
-                Images (optional, you can select multiple)
+                Image (optional)
               </label>
               <input
                 type="file"
-                name="images"
+                name="image"
                 accept="image/*"
-                multiple
                 onChange={handleChange}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] bg-white text-sm md:text-base"
               />
+              <div className="text-xs text-gray-500 mt-1">
+                <i className="fa-solid fa-info-circle mr-1"></i>
+                Supported formats: JPG, PNG, GIF, WebP
+              </div>
             </div>
+              
+              {/* Image Preview */}
+              {imagePreview && (
+                <div className="mt-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-sm font-medium text-[#2e2b41]">
+                      Image Preview
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
+                    >
+                      <i className="fa-solid fa-times text-xs"></i>
+                      Remove
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-full max-w-xs h-48 object-cover rounded-lg border-2 border-gray-200"
+                    />
+                  </div>
+                </div>
+              )}
 
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button
@@ -348,129 +406,126 @@ const Exhibit = () => {
           </div>
         </div>
 
-                 <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 border border-gray-200">
-           <div className="flex items-center">
-             <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 rounded-full flex items-center justify-center mr-3 md:mr-4">
-               <i className="fa-solid fa-clock text-green-600 text-lg md:text-xl"></i>
-             </div>
-             <div>
-               <p className="text-sm text-gray-600">Upcoming</p>
-               <p className="text-xl md:text-2xl font-bold text-green-600">{upcomingCount}</p>
-             </div>
-           </div>
-         </div>
+        <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 border border-gray-200">
+          <div className="flex items-center">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 rounded-full flex items-center justify-center mr-3 md:mr-4">
+              <i className="fa-solid fa-clock text-green-600 text-lg md:text-xl"></i>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Upcoming</p>
+              <p className="text-xl md:text-2xl font-bold text-green-600">{upcomingCount}</p>
+            </div>
+          </div>
+        </div>
 
-         <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 border border-gray-200">
-           <div className="flex items-center">
-             <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3 md:mr-4">
-               <i className="fa-solid fa-play text-blue-600 text-lg md:text-xl"></i>
-             </div>
-             <div>
-               <p className="text-sm text-gray-600">Ongoing</p>
-               <p className="text-xl md:text-2xl font-bold text-blue-600">{ongoingCount}</p>
-             </div>
-           </div>
-         </div>
+        <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 border border-gray-200">
+          <div className="flex items-center">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3 md:mr-4">
+              <i className="fa-solid fa-play text-blue-600 text-lg md:text-xl"></i>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Ongoing</p>
+              <p className="text-xl md:text-2xl font-bold text-blue-600">{ongoingCount}</p>
+            </div>
+          </div>
+        </div>
 
-         <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 border border-gray-200">
-           <div className="flex items-center">
-             <div className="w-10 h-10 md:w-12 md:h-12 bg-orange-100 rounded-full flex items-center justify-center mr-3 md:mr-4">
-               <i className="fa-solid fa-history text-orange-600 text-lg md:text-xl"></i>
-             </div>
-             <div>
-               <p className="text-sm text-gray-600">Past</p>
-               <p className="text-xl md:text-2xl font-bold text-orange-600">{pastCount}</p>
-             </div>
-           </div>
-         </div>
+        <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 border border-gray-200">
+          <div className="flex items-center">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-orange-100 rounded-full flex items-center justify-center mr-3 md:mr-4">
+              <i className="fa-solid fa-history text-orange-600 text-lg md:text-xl"></i>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Past</p>
+              <p className="text-xl md:text-2xl font-bold text-orange-600">{pastCount}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Tab Navigation */}
       <div className="bg-white rounded-lg shadow-lg border border-gray-200">
         <div className="border-b border-gray-200">
-                     <nav className="flex space-x-8 px-4 md:px-6">
-             <button
-               onClick={() => setActiveTab('upcoming')}
-               className={`py-3 md:py-4 px-1 border-b-2 font-medium text-sm md:text-base transition-colors ${
-                 activeTab === 'upcoming'
-                   ? 'border-[#AB8841] text-[#AB8841]'
-                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-               }`}
-             >
-               <i className="fa-solid fa-calendar-plus mr-2"></i>
-               Upcoming Exhibits ({upcomingCount})
-             </button>
-             <button
-               onClick={() => setActiveTab('ongoing')}
-               className={`py-3 md:py-4 px-1 border-b-2 font-medium text-sm md:text-base transition-colors ${
-                 activeTab === 'ongoing'
-                   ? 'border-[#AB8841] text-[#AB8841]'
-                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-               }`}
-             >
-               <i className="fa-solid fa-play mr-2"></i>
-               Ongoing Exhibits ({ongoingCount})
-             </button>
-             <button
-               onClick={() => setActiveTab('history')}
-               className={`py-3 md:py-4 px-1 border-b-2 font-medium text-sm md:text-base transition-colors ${
-                 activeTab === 'history'
-                   ? 'border-[#AB8841] text-[#AB8841]'
-                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-               }`}
-             >
-               <i className="fa-solid fa-history mr-2"></i>
-               Exhibit History ({pastCount})
-             </button>
-           </nav>
+          <nav className="flex space-x-8 px-4 md:px-6">
+            <button
+              onClick={() => setActiveTab('upcoming')}
+              className={`py-3 md:py-4 px-1 border-b-2 font-medium text-sm md:text-base transition-colors ${
+                activeTab === 'upcoming'
+                  ? 'border-[#AB8841] text-[#AB8841]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <i className="fa-solid fa-calendar-plus mr-2"></i>
+              Upcoming Exhibits ({upcomingCount})
+            </button>
+            <button
+              onClick={() => setActiveTab('ongoing')}
+              className={`py-3 md:py-4 px-1 border-b-2 font-medium text-sm md:text-base transition-colors ${
+                activeTab === 'ongoing'
+                  ? 'border-[#AB8841] text-[#AB8841]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <i className="fa-solid fa-play mr-2"></i>
+              Ongoing Exhibits ({ongoingCount})
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`py-3 md:py-4 px-1 border-b-2 font-medium text-sm md:text-base transition-colors ${
+                activeTab === 'history'
+                  ? 'border-[#AB8841] text-[#AB8841]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <i className="fa-solid fa-history mr-2"></i>
+              Exhibit History ({pastCount})
+            </button>
+          </nav>
         </div>
 
         {/* Tab Content */}
         <div className="p-4 md:p-6">
-                     {activeTab === 'upcoming' && (
-             <div>
-               
-               {upcoming.length > 0 ? (
-                 <ExhibitSection data={upcoming} onDelete={handleDelete} onView={setModalExhibit} />
-               ) : (
-                 <div className="text-center py-8 md:py-12">
-                   <i className="fa-solid fa-calendar-plus text-4xl md:text-6xl mb-4 text-gray-300"></i>
-                   <h3 className="text-lg md:text-xl font-semibold text-gray-600 mb-2">No Upcoming Exhibits</h3>
-                   <p className="text-sm md:text-base text-gray-500">No exhibits are scheduled for the future</p>
-                 </div>
-               )}
-             </div>
-           )}
+          {activeTab === 'upcoming' && (
+            <div>
+              {upcoming.length > 0 ? (
+                                 <ExhibitSection data={upcoming} onDelete={handleDelete} onView={setModalExhibit} />
+              ) : (
+                <div className="text-center py-8 md:py-12">
+                  <i className="fa-solid fa-calendar-plus text-4xl md:text-6xl mb-4 text-gray-300"></i>
+                  <h3 className="text-lg md:text-xl font-semibold text-gray-600 mb-2">No Upcoming Exhibits</h3>
+                  <p className="text-sm md:text-base text-gray-500">No exhibits are scheduled for the future</p>
+                </div>
+              )}
+            </div>
+          )}
 
-           {activeTab === 'ongoing' && (
-             <div>
-             
-               {ongoing.length > 0 ? (
-                 <ExhibitSection data={ongoing} onDelete={handleDelete} onView={setModalExhibit} />
-               ) : (
-                 <div className="text-center py-8 md:py-12">
-                   <i className="fa-solid fa-play text-4xl md:text-6xl mb-4 text-gray-300"></i>
-                   <h3 className="text-lg md:text-xl font-semibold text-gray-600 mb-2">No Ongoing Exhibits</h3>
-                   <p className="text-sm md:text-base text-gray-500">No exhibits are currently running</p>
-                 </div>
-               )}
-             </div>
-           )}
+          {activeTab === 'ongoing' && (
+            <div>
+              {ongoing.length > 0 ? (
+                                 <ExhibitSection data={ongoing} onDelete={handleDelete} onView={setModalExhibit} />
+              ) : (
+                <div className="text-center py-8 md:py-12">
+                  <i className="fa-solid fa-play text-4xl md:text-6xl mb-4 text-gray-300"></i>
+                  <h3 className="text-lg md:text-xl font-semibold text-gray-600 mb-2">No Ongoing Exhibits</h3>
+                  <p className="text-sm md:text-base text-gray-500">No exhibits are currently running</p>
+                </div>
+              )}
+            </div>
+          )}
 
-           {activeTab === 'history' && (
-             <div>
-              
-               {history.length > 0 ? (
-                 <ExhibitSection data={history} faded onDelete={handleDelete} onView={setModalExhibit} />
-               ) : (
-                 <div className="text-center py-8 md:py-12">
-                   <i className="fa-solid fa-history text-4xl md:text-6xl mb-4 text-gray-300"></i>
-                   <h3 className="text-lg md:text-xl font-semibold text-gray-600 mb-2">No Past Exhibits</h3>
-                   <p className="text-sm md:text-base text-gray-500">No exhibits have been completed yet</p>
-                 </div>
-               )}
-             </div>
-           )}
+          {activeTab === 'history' && (
+            <div>
+              {history.length > 0 ? (
+                                 <ExhibitSection data={history} faded onDelete={handleDelete} onView={setModalExhibit} />
+              ) : (
+                <div className="text-center py-8 md:py-12">
+                  <i className="fa-solid fa-history text-4xl md:text-6xl mb-4 text-gray-300"></i>
+                  <h3 className="text-lg md:text-xl font-semibold text-gray-600 mb-2">No Past Exhibits</h3>
+                  <p className="text-sm md:text-base text-gray-500">No exhibits have been completed yet</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -502,22 +557,17 @@ const Exhibit = () => {
             </div>
             
             <div className="p-4 md:p-6">
-              {modalExhibit.images && modalExhibit.images.length > 0 && (
+              {modalExhibit.image && (
                 <div className="mb-4 md:mb-6">
                   <h3 className="text-base md:text-lg font-semibold text-[#2e2b41] mb-3">
-                    <i className="fa-solid fa-images mr-2"></i>
-                    Exhibit Images
+                    <i className="fa-solid fa-image mr-2"></i>
+                    Exhibit Image
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-                    {modalExhibit.images.map((img, idx) => (
-                      <img 
-                        key={idx} 
-                        src={`http://localhost:3000${img}`} 
-                        alt="exhibit" 
-                        className="w-full h-24 md:h-32 object-cover rounded-lg shadow-md" 
-                      />
-                    ))}
-                  </div>
+                  <img 
+                    src={`http://localhost:3000${modalExhibit.image}`} 
+                    alt={modalExhibit.title}
+                    className="w-full max-w-md h-64 object-cover rounded-lg shadow-md" 
+                  />
                 </div>
               )}
               
@@ -569,6 +619,8 @@ const Exhibit = () => {
           </div>
         </div>
       )}
+
+      
     </div>
   );
 };
@@ -584,8 +636,8 @@ const ExhibitSection = ({ data, onDelete, onView, faded }) => {
             <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider">Title</th>
             <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider">Category</th>
             <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider">Location</th>
-            <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider">Curator</th>
-            <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider">Start Date</th>
+                         <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider">Curator</th>
+             <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider">Start Date</th>
             <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider">End Date</th>
             <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider">Actions</th>
           </tr>
@@ -594,15 +646,15 @@ const ExhibitSection = ({ data, onDelete, onView, faded }) => {
           {data.map((exhibit) => (
             <tr key={exhibit.id} className={`hover:bg-gray-50 transition-colors${faded ? " opacity-70" : ""}`}>
               <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
-                {exhibit.images && exhibit.images.length > 0 ? (
-                  <div className="flex gap-1 md:gap-2 flex-wrap">
-                    {exhibit.images.map((img, idx) => (
-                      <img key={idx} src={`http://localhost:3000${img}`} alt="exhibit" className="w-8 h-8 md:w-12 md:h-12 object-cover rounded-lg" />
-                    ))}
-                  </div>
+                {exhibit.image ? (
+                  <img 
+                    src={`http://localhost:3000${exhibit.image}`} 
+                    alt="exhibit" 
+                    className="w-12 h-12 md:w-16 md:h-16 object-cover rounded-lg" 
+                  />
                 ) : (
-                  <div className="w-8 h-8 md:w-12 md:h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                    <i className="fa-solid fa-image text-gray-400 text-xs md:text-sm"></i>
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                    <i className="fa-solid fa-image text-gray-400 text-sm"></i>
                   </div>
                 )}
               </td>
@@ -617,9 +669,9 @@ const ExhibitSection = ({ data, onDelete, onView, faded }) => {
               <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
                 <div className="text-sm text-gray-600 truncate max-w-20 md:max-w-32">{exhibit.location}</div>
               </td>
-              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
-                <div className="text-sm text-gray-600 truncate max-w-20 md:max-w-32">{exhibit.curator}</div>
-              </td>
+                             <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
+                 <div className="text-sm text-gray-600 truncate max-w-20 md:max-w-32">{exhibit.curator}</div>
+               </td>
               <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
                 <div className="text-sm text-[#2e2b41] truncate max-w-20 md:max-w-32">{formatDate(exhibit.startDate)}</div>
               </td>
@@ -628,13 +680,13 @@ const ExhibitSection = ({ data, onDelete, onView, faded }) => {
               </td>
               <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-sm font-medium">
                 <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
-                  <button
-                    onClick={() => onView(exhibit)}
-                    className="text-blue-600 hover:text-blue-800 font-semibold text-xs md:text-sm"
-                  >
-                    <i className="fa-solid fa-eye mr-1"></i>
-                    View
-                  </button>
+                                     <button
+                     onClick={() => onView(exhibit)}
+                     className="text-blue-600 hover:text-blue-800 font-semibold text-xs md:text-sm"
+                   >
+                     <i className="fa-solid fa-eye mr-1"></i>
+                     View
+                   </button>
                   {!faded && (
                     <button
                       onClick={() => onDelete(exhibit.id)}

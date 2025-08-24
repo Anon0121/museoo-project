@@ -13,3 +13,8 @@ UPDATE visitors SET nationality = 'local' WHERE nationality IS NULL OR nationali
 ALTER TABLE visitors MODIFY COLUMN nationality VARCHAR(50) NOT NULL;
 
 
+
+
+
+
+

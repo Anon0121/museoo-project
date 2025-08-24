@@ -7,8 +7,10 @@ const DigitalArchive = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedType, setSelectedType] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [selectedArchive, setSelectedArchive] = useState(null);
+  const [availableCategories, setAvailableCategories] = useState([]);
 
   const archiveTypes = [
     { value: '', label: 'All Types' },
@@ -19,10 +21,35 @@ const DigitalArchive = () => {
     { value: 'Other', label: 'Other Files' }
   ];
 
-  const searchArchives = async () => {
-    if (searchTerm.trim().length < 2 && !selectedType) {
+  const predefinedCategories = [
+    { value: '', label: 'All Categories' },
+    { value: 'History of Cdeo', label: 'History of Cdeo' },
+    { value: 'Local Heroes', label: 'Local Heroes' },
+    { value: 'History of Baragnays', label: 'History of Baragnays' },
+    { value: 'Fathers of City Charter', label: 'Fathers of City Charter' },
+    { value: 'Mayor Of Cagayan De oro City', label: 'Mayor Of Cagayan De oro City' },
+    { value: 'Other', label: 'Other' }
+  ];
+
+  // Load all visible documents
+  const loadAllArchives = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get('http://localhost:3000/api/archives');
+      setSearchResults(response.data);
+      setShowResults(true);
+    } catch (error) {
+      console.error('Error loading archives:', error);
       setSearchResults([]);
-      setShowResults(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const searchArchives = async () => {
+    if (searchTerm.trim().length < 2 && !selectedType && !selectedCategory) {
+      // If no search criteria, load all documents
+      await loadAllArchives();
       return;
     }
 
@@ -38,6 +65,10 @@ const DigitalArchive = () => {
       if (selectedType) {
         params.append('type', selectedType);
       }
+
+      if (selectedCategory) {
+        params.append('category', selectedCategory);
+      }
       
       const response = await axios.get(`http://localhost:3000/api/archives?${params.toString()}`);
       setSearchResults(response.data);
@@ -50,10 +81,26 @@ const DigitalArchive = () => {
     }
   };
 
+  // Load all documents and categories on component mount
+  useEffect(() => {
+    loadAllArchives();
+    
+    const fetchCategories = async () => {
+      try {
+        const response = await axios.get('http://localhost:3000/api/archives/categories');
+        setAvailableCategories(response.data);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // Handle search and filter changes
   useEffect(() => {
     const debounceTimer = setTimeout(searchArchives, 500);
     return () => clearTimeout(debounceTimer);
-  }, [searchTerm, selectedType]);
+  }, [searchTerm, selectedType, selectedCategory]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -145,7 +192,7 @@ const DigitalArchive = () => {
         {/* Search Form */}
         <div className="bg-black/30 backdrop-blur-sm border border-gray-700 rounded-2xl p-8 mb-8">
           <form onSubmit={handleSearch} className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {/* Search Input */}
               <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -182,9 +229,27 @@ const DigitalArchive = () => {
                   ))}
                 </select>
               </div>
+
+              {/* Category Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Category
+                </label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:border-transparent transition-all duration-300"
+                >
+                  {predefinedCategories.map((category) => (
+                    <option key={category.value} value={category.value}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
               <button
                 type="submit"
                 className="px-8 py-3 bg-gradient-to-r from-[#8B6B21] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#8B6B21] text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
@@ -202,6 +267,19 @@ const DigitalArchive = () => {
                     <span>Search Archives</span>
                   </div>
                 )}
+              </button>
+              
+              <button
+                type="button"
+                onClick={loadAllArchives}
+                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
+              >
+                <div className="flex items-center space-x-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                  <span>Show All</span>
+                </div>
               </button>
 
               <div className="text-sm text-gray-400">
@@ -254,6 +332,11 @@ const DigitalArchive = () => {
                           }`}>
                             {archive.type || 'Document'}
                           </span>
+                          {archive.category && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-[#D4AF37]/20 text-[#D4AF37]">
+                              {archive.category}
+                            </span>
+                          )}
                           {archive.date && (
                             <span className="flex items-center">
                               <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -302,7 +385,13 @@ const DigitalArchive = () => {
                   </svg>
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-2">No Archives Found</h3>
-                <p className="text-gray-400">Try adjusting your search terms or filters</p>
+                <p className="text-gray-400 mb-4">Try adjusting your search terms or filters</p>
+                <button
+                  onClick={loadAllArchives}
+                  className="px-6 py-2 bg-[#8B6B21] hover:bg-[#D4AF37] text-white font-medium rounded-lg transition-colors duration-300"
+                >
+                  Show All Documents
+                </button>
               </div>
             )}
           </div>
@@ -345,6 +434,10 @@ const DigitalArchive = () => {
                       <div className="flex justify-between">
                         <span>Type:</span>
                         <span className="text-white">{selectedArchive.type}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Category:</span>
+                        <span className="text-white">{selectedArchive.category || 'Other'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Date:</span>

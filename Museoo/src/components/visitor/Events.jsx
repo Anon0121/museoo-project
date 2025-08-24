@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-
 import api from '../../config/api';
+import EventRegistration from './EventRegistration';
 
 
 
@@ -11,6 +11,8 @@ const Events = () => {
   const [loading, setLoading] = useState(true);
 
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [showRegistration, setShowRegistration] = useState(false);
+  const [selectedEventForRegistration, setSelectedEventForRegistration] = useState(null);
 
 
 
@@ -142,8 +144,6 @@ const Events = () => {
 
             <h3 className="text-xl font-bold text-gray-800 mb-2">{event.title}</h3>
 
-            <p className="text-gray-600 mb-3 line-clamp-2">{event.description}</p>
-
           </div>
 
           <div className="w-12 h-12 bg-gradient-to-br from-[#8B6B21] to-[#D4AF37] rounded-xl flex items-center justify-center ml-4 flex-shrink-0">
@@ -176,15 +176,17 @@ const Events = () => {
 
           </span>
 
+
+
           <span className="flex items-center">
 
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
 
             </svg>
 
-            {formatTime(event.time)}
+            {(event.max_capacity || 50) - (event.current_registrations || 0)} slots left
 
           </span>
 
@@ -196,6 +198,29 @@ const Events = () => {
 
         </span>
 
+      </div>
+      
+      {/* Registration Button */}
+      <div className="mt-4">
+        {(event.current_registrations || 0) >= (event.max_capacity || 50) ? (
+          <button
+            disabled
+            className="w-full bg-gray-400 text-white py-3 px-4 rounded-xl font-semibold cursor-not-allowed"
+          >
+            Event Full
+          </button>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedEventForRegistration(event);
+              setShowRegistration(true);
+            }}
+            className="w-full bg-gradient-to-r from-[#8B6B21] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#8B6B21] text-white py-3 px-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105"
+          >
+            Register Now
+          </button>
+        )}
       </div>
 
     </div>
@@ -488,20 +513,53 @@ const Events = () => {
 
                   )}
 
+                  <div className="bg-gray-50 rounded-xl p-4">
+
+                    <div className="flex items-center space-x-3 mb-2">
+
+                      <svg className="w-5 h-5 text-[#8B6B21]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+
+                      </svg>
+
+                      <span className="font-semibold text-gray-800">Capacity</span>
+
+                    </div>
+
+                    <p className="text-gray-600">{(selectedEvent.max_capacity || 50) - (selectedEvent.current_registrations || 0)} slots remaining</p>
+
+                  </div>
 
 
-                  <div className="flex justify-end pt-6 border-t border-gray-200">
+
+                  <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+
+                    {(selectedEvent.current_registrations || 0) >= (selectedEvent.max_capacity || 50) ? (
+                      <button
+                        disabled
+                        className="px-6 py-3 bg-gray-400 text-white rounded-xl font-semibold cursor-not-allowed"
+                      >
+                        Event Full
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setSelectedEventForRegistration(selectedEvent);
+                          setShowRegistration(true);
+                          setSelectedEvent(null);
+                        }}
+                        className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105"
+                      >
+                        Register Now
+                      </button>
+                    )}
 
                     <button
-
                       onClick={() => setSelectedEvent(null)}
-
                       className="px-6 py-3 bg-gradient-to-r from-[#8B6B21] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#8B6B21] text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105"
-
                     >
-
                       Close
-
                     </button>
 
                   </div>
@@ -514,6 +572,24 @@ const Events = () => {
 
           </div>
 
+        )}
+
+        {/* Event Registration Modal */}
+        {showRegistration && selectedEventForRegistration && (
+          <EventRegistration
+            exhibit={selectedEventForRegistration}
+            onClose={() => {
+              setShowRegistration(false);
+              setSelectedEventForRegistration(null);
+            }}
+            onRegistrationSuccess={(registration) => {
+              console.log('Registration successful:', registration);
+              setShowRegistration(false);
+              setSelectedEventForRegistration(null);
+              // Optionally refresh the events to update capacity
+              fetchEvents();
+            }}
+          />
         )}
 
       </div>

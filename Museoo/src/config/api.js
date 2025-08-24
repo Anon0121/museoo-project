@@ -2,7 +2,7 @@
 const getBackendURL = () => {
   // If accessing from localhost, use localhost
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:5000';
+    return 'http://localhost:3000';
   }
 
   // If accessing from Vercel frontend, use Vercel backend
@@ -15,11 +15,11 @@ const getBackendURL = () => {
     // Extract the ngrok URL and use it for backend
     const currentHost = window.location.hostname;
     const currentProtocol = window.location.protocol;
-    return `${currentProtocol}//${currentHost.replace('5173', '5000')}`;
+    return `${currentProtocol}//${currentHost.replace('5173', '3000')}`;
   }
 
   // If accessing from external IP, use the same IP for backend
-  return `http://${window.location.hostname}:5000`;
+  return `http://${window.location.hostname}:3000`;
 };
 
 export const API_BASE_URL = getBackendURL();

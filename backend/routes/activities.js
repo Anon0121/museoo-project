@@ -25,11 +25,27 @@ router.post('/', upload.array('images'), async (req, res) => {
         'INSERT INTO event_details (activity_id, start_date, time, location, organizer) VALUES (?, ?, ?, ?, ?)',
         [activityId, details.start_date, details.time, details.location, details.organizer]
       );
+      
+      // Update activities table with capacity info for events
+      if (details.max_capacity) {
+        await pool.query(
+          'UPDATE activities SET max_capacity = ? WHERE id = ?',
+          [details.max_capacity, activityId]
+        );
+      }
     } else if (type === 'exhibit') {
       await pool.query(
         'INSERT INTO exhibit_details (activity_id, start_date, end_date, location, curator, category) VALUES (?, ?, ?, ?, ?, ?)',
         [activityId, details.start_date, details.end_date, details.location, details.curator, details.category]
       );
+      
+      // Update activities table with capacity info for exhibits
+      if (details.max_capacity) {
+        await pool.query(
+          'UPDATE activities SET max_capacity = ? WHERE id = ?',
+          [details.max_capacity, activityId]
+        );
+      }
     }
 
     // 3. Save image URLs
@@ -55,7 +71,8 @@ router.get('/exhibits', async (req, res) => {
   try {
     // Get all exhibits
     const [exhibits] = await pool.query(
-      "SELECT a.id, a.title, a.description, ed.start_date, ed.end_date, ed.location, ed.curator, ed.category \
+      "SELECT a.id, a.title, a.description, ed.start_date, ed.end_date, ed.location, ed.curator, ed.category, \
+              a.max_capacity, a.current_registrations \
        FROM activities a \
        JOIN exhibit_details ed ON a.id = ed.activity_id \
        WHERE a.type = 'exhibit'"
@@ -89,7 +106,8 @@ router.get('/events', async (req, res) => {
   try {
     // Get all events
     const [events] = await pool.query(
-      "SELECT a.id, a.title, a.description, ed.start_date, ed.time, ed.location, ed.organizer \
+      "SELECT a.id, a.title, a.description, ed.start_date, ed.time, ed.location, ed.organizer, \
+              a.max_capacity, a.current_registrations \
        FROM activities a \
        JOIN event_details ed ON a.id = ed.activity_id \
        WHERE a.type = 'event'"

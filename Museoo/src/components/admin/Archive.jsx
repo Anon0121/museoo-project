@@ -10,6 +10,15 @@ const FILE_TYPES = [
   { label: 'Other', value: 'Other', icon: 'fa-file' },
 ];
 
+const ARCHIVE_CATEGORIES = [
+  { label: 'History of Cdeo', value: 'History of Cdeo' },
+  { label: 'Local Heroes', value: 'Local Heroes' },
+  { label: 'History of Baragnays', value: 'History of Baragnays' },
+  { label: 'Fathers of City Charter', value: 'Fathers of City Charter' },
+  { label: 'Mayor Of Cagayan De oro City', value: 'Mayor Of Cagayan De oro City' },
+  { label: 'Other', value: 'Other' },
+];
+
 function formatDate(dateString) {
   if (!dateString) return '';
   const date = new Date(dateString);
@@ -22,8 +31,10 @@ const Archive = ({ userPermissions }) => {
     description: '',
     date: '',
     type: 'Document',
+    category: 'Other',
     tags: '',
     file: null,
+    is_visible: true,
   });
   const [archives, setArchives] = useState([]);
   const [search, setSearch] = useState('');
@@ -40,7 +51,7 @@ const Archive = ({ userPermissions }) => {
 
   const fetchArchives = async () => {
     try {
-      const response = await axios.get('http://localhost:3000/api/archives');
+      const response = await axios.get('http://localhost:3000/api/archives/admin');
       setArchives(response.data);
     } catch (error) {
       console.error('Error fetching archives:', error);
@@ -76,7 +87,7 @@ const Archive = ({ userPermissions }) => {
 
       const response = await axios.post('http://localhost:3000/api/archives', formData);
       if (response.status === 200) {
-        setForm({ title: '', description: '', date: '', type: 'Document', tags: '', file: null });
+        setForm({ title: '', description: '', date: '', type: 'Document', category: 'Other', tags: '', file: null, is_visible: true });
         document.getElementById('archive-upload-form').reset();
         setShowForm(false);
         fetchArchives();
@@ -108,6 +119,24 @@ const Archive = ({ userPermissions }) => {
     } catch (error) {
       console.error('Delete error:', error);
       alert('Delete failed.');
+    }
+  };
+
+  // Handle visibility toggle (admin only)
+  const handleVisibilityToggle = async (id, currentVisibility) => {
+    try {
+      const response = await axios.patch(`http://localhost:3000/api/archives/${id}/visibility`, {
+        is_visible: !currentVisibility
+      });
+      if (response.status === 200) {
+        setArchives(archives.map(a => 
+          a.id === id ? { ...a, is_visible: !currentVisibility } : a
+        ));
+        alert(`Archive ${!currentVisibility ? 'shown' : 'hidden'} successfully!`);
+      }
+    } catch (error) {
+      console.error('Visibility toggle error:', error);
+      alert('Visibility toggle failed.');
     }
   };
 
@@ -217,7 +246,7 @@ const Archive = ({ userPermissions }) => {
             Upload New Archive
           </h3>
           <form id="archive-upload-form" onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-[#2e2b41] font-semibold mb-2">
                   Title *
@@ -243,6 +272,23 @@ const Archive = ({ userPermissions }) => {
                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
                 >
                   {FILE_TYPES.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[#2e2b41] font-semibold mb-2">
+                  Category *
+                </label>
+                <select 
+                  name="category" 
+                  value={form.category}
+                  onChange={handleChange} 
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                >
+                  {ARCHIVE_CATEGORIES.map(opt => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
@@ -304,6 +350,42 @@ const Archive = ({ userPermissions }) => {
                 className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] bg-white text-sm" 
                 required 
               />
+            </div>
+            
+            <div>
+              <label className="block text-[#2e2b41] font-semibold mb-2">
+                Visibility
+              </label>
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center">
+                  <input 
+                    type="radio" 
+                    name="is_visible" 
+                    value="true"
+                    checked={form.is_visible === true}
+                    onChange={(e) => setForm(prev => ({ ...prev, is_visible: e.target.value === 'true' }))}
+                    className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
+                  />
+                  <span className="text-sm text-gray-700">
+                    <i className="fa-solid fa-eye mr-1 text-green-600"></i>
+                    Visible to visitors
+                  </span>
+                </label>
+                <label className="flex items-center">
+                  <input 
+                    type="radio" 
+                    name="is_visible" 
+                    value="false"
+                    checked={form.is_visible === false}
+                    onChange={(e) => setForm(prev => ({ ...prev, is_visible: e.target.value === 'true' }))}
+                    className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
+                  />
+                  <span className="text-sm text-gray-700">
+                    <i className="fa-solid fa-eye-slash mr-1 text-gray-600"></i>
+                    Hidden from visitors
+                  </span>
+                </label>
+              </div>
             </div>
             
             <div className="flex gap-4 pt-4">
@@ -431,12 +513,26 @@ const Archive = ({ userPermissions }) => {
                       <i className={`fa-solid ${getTypeIcon(item.type)} mr-2`}></i>
                       {item.type} | {formatDate(item.date)}
                     </div>
+                    {item.category && (
+                      <div className="text-sm text-[#AB8841] font-medium">
+                        <i className="fa-solid fa-folder mr-1"></i>
+                        {item.category}
+                      </div>
+                    )}
                     {item.tags && (
                       <div className="text-gray-500 text-xs">
                         <i className="fa-solid fa-tags mr-1"></i>
                         {item.tags}
                       </div>
                     )}
+                    <div className={`text-xs font-medium px-2 py-1 rounded-full inline-block ${
+                      item.is_visible 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <i className={`fa-solid ${item.is_visible ? 'fa-eye' : 'fa-eye-slash'} mr-1`}></i>
+                      {item.is_visible ? 'Visible' : 'Hidden'}
+                    </div>
                     <div className="flex gap-2 pt-2">
                       <button 
                         onClick={() => setPreview(item)} 
@@ -454,6 +550,19 @@ const Archive = ({ userPermissions }) => {
                           <i className="fa-solid fa-download mr-1"></i>
                           Download
                         </a>
+                      )}
+                      {canEditArchive && (
+                        <button 
+                          onClick={() => handleVisibilityToggle(item.id, item.is_visible)} 
+                          className={`font-semibold text-sm ${
+                            item.is_visible 
+                              ? 'text-orange-600 hover:text-orange-800' 
+                              : 'text-blue-600 hover:text-blue-800'
+                          }`}
+                        >
+                          <i className={`fa-solid ${item.is_visible ? 'fa-eye-slash' : 'fa-eye'} mr-1`}></i>
+                          {item.is_visible ? 'Hide' : 'Show'}
+                        </button>
                       )}
                       {canAdminArchive && (
                         <button 
@@ -489,6 +598,7 @@ const Archive = ({ userPermissions }) => {
               <div><strong>Description:</strong> {preview.description || 'No description'}</div>
               <div><strong>Date:</strong> {formatDate(preview.date)}</div>
               <div><strong>Type:</strong> {preview.type}</div>
+              <div><strong>Category:</strong> {preview.category || 'Other'}</div>
               <div><strong>Tags:</strong> {preview.tags || 'No tags'}</div>
             </div>
             <div className="mt-6">

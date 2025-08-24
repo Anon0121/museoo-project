@@ -191,7 +191,7 @@ const Reports = ({ userPermissions }) => {
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Visitor ID</th>
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Name</th>
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Gender</th>
-                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Nationality</th>
+                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Visitor Type</th>
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Email</th>
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Address</th>
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Purpose</th>
@@ -199,7 +199,7 @@ const Reports = ({ userPermissions }) => {
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Registration Date</th>
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Booking ID</th>
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Entry Date</th>
-                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">QR Scan Time</th>
+                      <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Visit Time</th>
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Time Slot</th>
                       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Status</th>
                     </tr>
@@ -210,7 +210,7 @@ const Reports = ({ userPermissions }) => {
                         <td class="px-4 py-2 text-sm text-gray-900">${visitor.visitor_id}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${visitor.first_name} ${visitor.last_name}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${visitor.gender}</td>
-                        <td class="px-4 py-2 text-sm text-gray-900">${visitor.nationality}</td>
+                        <td class="px-4 py-2 text-sm text-gray-900">${visitor.visitor_type}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${visitor.email}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${visitor.address}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${visitor.purpose}</td>
@@ -218,7 +218,7 @@ const Reports = ({ userPermissions }) => {
                         <td class="px-4 py-2 text-sm text-gray-900">${new Date(visitor.registration_date).toLocaleDateString()}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${visitor.booking_id}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${new Date(visitor.visit_date).toLocaleDateString()}</td>
-                        <td class="px-4 py-2 text-sm text-gray-900">${new Date(visitor.scan_time).toLocaleString()}</td>
+                        <td class="px-4 py-2 text-sm text-gray-900">${new Date(visitor.checkin_time).toLocaleString()}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${visitor.time_slot}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${visitor.booking_status}</td>
                       </tr>

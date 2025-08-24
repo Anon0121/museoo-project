@@ -27,7 +27,7 @@ const ScheduleVisit = () => {
     gender: "", // Remove default - force user to choose
     address: "",
     email: "",
-    nationality: "",
+    visitorType: "",
     purpose: "educational",
     institution: "",
   });
@@ -49,7 +49,7 @@ const ScheduleVisit = () => {
         const response = await api.get(`/api/slots?date=${visitDate}`);
         console.log('✅ Slots received:', response.data);
         
-        if (Array.isArray(response.data) && response.data.length > 0) {
+        if (Array.isArray(response.data)) {
           setSlots(response.data);
         } else {
           // If no slots returned, create default slots for the date
@@ -136,7 +136,7 @@ const ScheduleVisit = () => {
           gender: "male",
           address: "",
           email: "",
-          nationality: "",
+          visitorType: "",
           purpose: "educational",
           institution: "",
         });
@@ -282,8 +282,61 @@ const ScheduleVisit = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
                 <Input label="First Name" name="firstName" value={mainVisitor.firstName} onChange={handleMainChange} required />
                 <Input label="Last Name" name="lastName" value={mainVisitor.lastName} onChange={handleMainChange} required />
-                <Select label="Gender" name="gender" value={mainVisitor.gender} onChange={handleMainChange} options={["Male", "Female", "LGBT", "Prefer not to say"]} placeholder="Pick your gender" required />
-                <Select label="Nationality" name="nationality" value={mainVisitor.nationality} onChange={handleMainChange} options={["Local", "Foreign"]} placeholder="Choose your nationality" required />
+                {/* Gender Radio Buttons */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Gender *
+                  </label>
+                  <div className="flex flex-wrap gap-4">
+                    {["Male", "Female", "LGBTQ+"].map((option) => (
+                      <label key={option} className="relative flex items-center cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="gender"
+                          value={option}
+                          checked={mainVisitor.gender === option}
+                          onChange={handleMainChange}
+                          required
+                          className="sr-only peer"
+                        />
+                        <div className="w-5 h-5 border-2 border-gray-300 rounded-full peer-checked:border-blue-500 peer-checked:bg-blue-500 peer-focus:ring-2 peer-focus:ring-blue-200 transition-all duration-200 group-hover:border-blue-400">
+                          <div className="w-2 h-2 bg-white rounded-full m-auto mt-1.5 peer-checked:opacity-100 opacity-0 transition-opacity duration-200"></div>
+                        </div>
+                        <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors duration-200">
+                          {option}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Visitor Type Radio Buttons */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Visitor Type *
+                  </label>
+                  <div className="flex flex-wrap gap-4">
+                    {["Local", "Foreign"].map((option) => (
+                      <label key={option} className="relative flex items-center cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="visitorType"
+                          value={option}
+                          checked={mainVisitor.visitorType === option}
+                          onChange={handleMainChange}
+                          required
+                          className="sr-only peer"
+                        />
+                        <div className="w-5 h-5 border-2 border-gray-300 rounded-full peer-checked:border-blue-500 peer-checked:bg-blue-500 peer-focus:ring-2 peer-focus:ring-blue-200 transition-all duration-200 group-hover:border-blue-400">
+                          <div className="w-2 h-2 bg-white rounded-full m-auto mt-1.5 peer-checked:opacity-100 opacity-0 transition-opacity duration-200"></div>
+                        </div>
+                        <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors duration-200">
+                          {option}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <Input label="Address" name="address" value={mainVisitor.address} onChange={handleMainChange} required className="md:col-span-2" />
                 <Input label="Email" name="email" type="email" value={mainVisitor.email} onChange={handleMainChange} required className="md:col-span-2" />
                 <Input label="Institution/Organization" name="institution" value={mainVisitor.institution} onChange={handleMainChange} placeholder="e.g., University, Company, School (optional)" className="md:col-span-2" />

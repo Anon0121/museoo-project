@@ -51,10 +51,10 @@ const About = () => {
           </div>
         </div>
 
-        {/* History & Image Section - Responsive Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-center">
+                 {/* History & Image Section - Responsive Grid Layout */}
+         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-stretch">
           {/* History Text */}
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-6 sm:p-8 border border-gray-100 order-2 lg:order-1">
+                     <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-6 sm:p-8 border border-gray-100 order-2 lg:order-1 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
             <div className="flex items-center mb-4 sm:mb-6">
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-[#8B6B21] to-[#D4AF37] rounded-lg sm:rounded-xl flex items-center justify-center mr-3 sm:mr-4 flex-shrink-0">
                 <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,14 +73,15 @@ const About = () => {
             </div>
           </div>
 
-          {/* Museum Image */}
-          <div className="relative group order-1 lg:order-2">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#8B6B21]/20 to-[#D4AF37]/20 rounded-xl sm:rounded-2xl transform group-hover:scale-105 transition-transform duration-300"></div>
-            <img
-              src={oldMuseumImage}
-              alt="City Museum of Cagayan de Oro"
-              className="w-full h-48 sm:h-64 md:h-80 lg:h-96 object-cover rounded-xl sm:rounded-2xl shadow-2xl transform group-hover:scale-105 transition-transform duration-300"
-            />
+                     {/* Museum Image */}
+           <div className="relative group order-1 lg:order-2 h-full">
+             <div className="absolute inset-0 bg-gradient-to-r from-[#8B6B21]/20 to-[#D4AF37]/20 rounded-xl sm:rounded-2xl transform group-hover:scale-105 transition-transform duration-300"></div>
+                           <img
+                src={oldMuseumImage}
+                alt="City Museum of Cagayan de Oro"
+                className="w-full h-full object-cover rounded-xl sm:rounded-2xl shadow-2xl transform group-hover:scale-105 transition-transform duration-300"
+                style={{ objectPosition: 'center -70%' }}
+              />
             <div className="absolute bottom-3 sm:bottom-4 left-3 sm:left-4 right-3 sm:right-4 bg-black/70 text-white p-3 sm:p-4 rounded-lg sm:rounded-xl backdrop-blur-sm">
               <p className="text-xs sm:text-sm font-medium">Historic Water Reservoir (1922)</p>
               <p className="text-xs opacity-90">Transformed into Museum in 2008</p>

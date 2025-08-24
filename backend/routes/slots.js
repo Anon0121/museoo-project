@@ -15,6 +15,117 @@ const TIME_SLOTS = [
   "15:00 - 16:00",
 ];
 
+// Function to send emails for walk-in bookings
+async function sendWalkInBookingEmails(bookingId, mainVisitor, companionTokens, date, time) {
+  try {
+    // Create email transporter
+    let transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'museoweb1@gmail.com',
+        pass: 'akrtgds yyprsfxyi'
+      }
+    });
+
+    // Send email to main visitor
+    if (mainVisitor.email) {
+      const isWalkInScheduling = mainVisitor.firstName === 'Walk-in';
+      const emailSubject = isWalkInScheduling ? '🎫 Your Walk-In Museum Visit - Complete Your Profile' : '🎫 Your Museum Visit QR Code - Complete Your Profile';
+      const emailHtml = `
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white;">
+                <h1 style="margin: 0; font-size: 28px;">🎫 Museum Visit Confirmed!</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px;">${isWalkInScheduling ? 'Your walk-in visit has been scheduled' : 'Your walk-in booking has been auto-approved'}</p>
+            </div>
+            
+            <div style="padding: 30px; background: #f9f9f9;">
+                <h2 style="color: #2e2b41; margin-bottom: 20px;">Hello ${mainVisitor.firstName === 'Walk-in' ? '' : mainVisitor.firstName + '!'}</h2>
+                
+                <p>Your museum visit has been <strong>scheduled</strong> for <strong>${date}</strong> at <strong>${time}</strong>.</p>
+                
+                <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #AB8841;">
+                    <h3 style="color: #AB8841; margin-top: 0;">📋 Complete Your Profile</h3>
+                    <p>To get your QR code and complete your booking, please click the link below and fill in your details:</p>
+                    <a href="http://localhost:3000/complete-profile/${bookingId}" style="display: inline-block; background: #AB8841; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0;">Complete Profile</a>
+                </div>
+                
+                <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #2e2b41;">📅 Visit Details</h4>
+                    <p><strong>Date:</strong> ${date}</p>
+                    <p><strong>Time:</strong> ${time}</p>
+                    <p><strong>Booking ID:</strong> ${bookingId}</p>
+                    <p><strong>Status:</strong> ✅ Scheduled</p>
+                </div>
+                
+                <p style="color: #666; font-size: 14px;">Please complete your profile as soon as possible to receive your QR code.</p>
+            </div>
+        </body>
+        </html>
+      `;
+      
+      const mailOptions = {
+        from: 'museoweb1@gmail.com',
+        to: mainVisitor.email,
+        subject: emailSubject,
+        html: emailHtml
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log(`Email sent to main visitor: ${mainVisitor.email}`);
+    }
+
+    // Send emails to additional visitors
+    for (const companion of companionTokens) {
+      if (companion.email) {
+        const mailOptions = {
+          from: 'museoweb1@gmail.com',
+          to: companion.email,
+          subject: '🎫 Your Museum Visit QR Code - Complete Your Profile',
+          html: `
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white;">
+                    <h1 style="margin: 0; font-size: 28px;">🎫 Museum Visit QR Code</h1>
+                    <p style="margin: 10px 0 0 0; font-size: 16px;">Complete your profile to get your QR code</p>
+                </div>
+                
+                <div style="padding: 30px; background: #f9f9f9;">
+                    <h2 style="color: #2e2b41; margin-bottom: 20px;">Hello!</h2>
+                    
+                    <p>You have been added to a museum visit scheduled for <strong>${date}</strong> at <strong>${time}</strong>.</p>
+                    
+                    <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #AB8841;">
+                        <h3 style="color: #AB8841; margin-top: 0;">📋 Complete Your Profile</h3>
+                        <p>To get your QR code and complete your booking, please click the link below and fill in your details:</p>
+                        <a href="http://localhost:3000/complete-profile/${companion.tokenId}" style="display: inline-block; background: #AB8841; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0;">Complete Profile</a>
+                    </div>
+                    
+                    <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <h4 style="margin-top: 0; color: #2e2b41;">📅 Visit Details</h4>
+                        <p><strong>Date:</strong> ${date}</p>
+                        <p><strong>Time:</strong> ${time}</p>
+                        <p><strong>Token ID:</strong> ${companion.tokenId}</p>
+                    </div>
+                    
+                    <p style="color: #666; font-size: 14px;">Please complete your profile as soon as possible to receive your QR code.</p>
+                </div>
+            </body>
+            </html>
+          `
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`Email sent to additional visitor: ${companion.email}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error sending walk-in booking emails:', error);
+    console.error('Error stack:', error.stack);
+    throw error;
+  }
+}
+
 // Get slots for a date
 router.get('/', async (req, res) => {
   const { date } = req.query;
@@ -47,8 +158,19 @@ router.get('/', async (req, res) => {
 
 // Book a slot (group or individual)
 router.post('/book', async (req, res) => {
-  const { type, mainVisitor, companions, totalVisitors, date, time } = req.body;
+  const { type, mainVisitor, groupMembers, companions, totalVisitors, date, time } = req.body;
   if (!date || !time || !mainVisitor || !totalVisitors) return res.status(400).json({ error: 'Missing data' });
+
+  // Validate visitor limits for group walk-in bookings
+  if (type === 'group-walkin') {
+    const additionalVisitors = groupMembers?.length || companions?.length || 0;
+    if (additionalVisitors > 29) {
+      return res.status(400).json({ error: 'Maximum 29 additional visitors allowed for group walk-in bookings' });
+    }
+    if (totalVisitors > 30) { // 1 main visitor + 29 additional = 30 total
+      return res.status(400).json({ error: 'Maximum 30 total visitors allowed for group walk-in bookings' });
+    }
+  }
 
   const conn = await pool.getConnection();
   try {
@@ -63,14 +185,17 @@ router.post('/book', async (req, res) => {
       return res.status(400).json({ error: 'Slot full' });
     }
 
+    // Determine initial status based on booking type
+    const initialStatus = (type === 'individual walk-in' || type === 'group walk-in') ? 'approved' : 'pending';
+    
     // Insert booking
     const [bookingResult] = await conn.query(
       `INSERT INTO bookings (first_name, last_name, type, status, date, time_slot, total_visitors) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         mainVisitor.firstName,
         mainVisitor.lastName,
-        type === 'group' ? 'group' : 'individual',
-        'pending',
+        type, // Use the exact type passed (individual walk-in, group walk-in, etc.)
+        initialStatus,
         date,
         time,
         totalVisitors
@@ -78,18 +203,24 @@ router.post('/book', async (req, res) => {
     );
     const bookingId = bookingResult.insertId;
 
-    // Insert main visitor
-    const [mainVisitorResult] = await conn.query(
-      `INSERT INTO visitors (booking_id, first_name, last_name, gender, address, email, nationality, purpose, institution, status, is_main_visitor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)`,
-      [bookingId, mainVisitor.firstName, mainVisitor.lastName, mainVisitor.gender, mainVisitor.address, mainVisitor.email, mainVisitor.nationality, mainVisitor.purpose || 'other', mainVisitor.institution || null, 'pending']
-    );
-    const mainVisitorId = mainVisitorResult.insertId;
+    // Insert main visitor with complete information (skip for group-walkin as they'll fill details later)
+    let mainVisitorId = null;
+    if (type !== 'group-walkin') {
+      const visitorStatus = (type === 'individual walk-in' || type === 'group walk-in') ? 'approved' : 'pending';
+      const [mainVisitorResult] = await conn.query(
+        `INSERT INTO visitors (booking_id, first_name, last_name, gender, address, email, visitor_type, purpose, institution, status, is_main_visitor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)`,
+                [bookingId, mainVisitor.firstName, mainVisitor.lastName, mainVisitor.gender || '', mainVisitor.address || '', mainVisitor.email, mainVisitor.visitorType || 'local', mainVisitor.purpose || 'other', mainVisitor.institution || null, visitorStatus]
+      );
+      mainVisitorId = mainVisitorResult.insertId;
+    }
 
-    // Handle companions (only emails provided)
+    // Handle group members (additional visitors)
     let companionTokens = [];
-    if (type === 'group' && Array.isArray(companions)) {
-      for (let i = 0; i < companions.length; i++) {
-        const companion = companions[i];
+    const membersToProcess = groupMembers || companions || [];
+    
+    if ((type === 'group' || type === 'group walk-in') && Array.isArray(membersToProcess)) {
+      for (let i = 0; i < membersToProcess.length; i++) {
+        const member = membersToProcess[i];
         
         // Generate unique token
         const tokenId = `ADD-BOOK${bookingId}-${i + 1}`;
@@ -97,22 +228,95 @@ router.post('/book', async (req, res) => {
         // Insert companion token record
         await conn.query(
           `INSERT INTO additional_visitors (token_id, booking_id, email) VALUES (?, ?, ?)`,
-          [tokenId, bookingId, companion.email]
+          [tokenId, bookingId, member.email]
         );
         
         companionTokens.push({
           tokenId,
-          email: companion.email
+          email: member.email
         });
+      }
+    }
+
+    // Handle walk-in types - create tokens with 24-hour expiration
+    if (type === 'walk-in scheduling' || type === 'ind-walkin' || type === 'group-walkin') {
+      // Calculate expiration time (24 hours from now)
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+      
+      if (type === 'walk-in scheduling' || type === 'ind-walkin') {
+        // Individual walk-in - create token for main visitor
+        const walkInTokenId = type === 'walk-in scheduling' ? `WALKIN-${bookingId}` : `INDWALKIN-${bookingId}`;
+        
+        // Insert walk-in visitor token record with expiration
+        await conn.query(
+          `INSERT INTO additional_visitors (token_id, booking_id, email, expires_at) VALUES (?, ?, ?, ?)`,
+          [walkInTokenId, bookingId, mainVisitor.email, expiresAt]
+        );
+        
+        companionTokens.push({
+          tokenId: walkInTokenId,
+          email: mainVisitor.email
+        });
+      } else if (type === 'group-walkin') {
+        // Group walk-in - create tokens for all visitors with expiration (including main visitor)
+        
+        // Create token for main visitor
+        const mainVisitorTokenId = `GROUPWALKIN-${bookingId}-0`;
+        await conn.query(
+          `INSERT INTO additional_visitors (token_id, booking_id, email, expires_at) VALUES (?, ?, ?, ?)`,
+          [mainVisitorTokenId, bookingId, mainVisitor.email, expiresAt]
+        );
+        
+        companionTokens.push({
+          tokenId: mainVisitorTokenId,
+          email: mainVisitor.email
+        });
+        
+        // Create tokens for additional visitors
+        for (let i = 0; i < membersToProcess.length; i++) {
+          const member = membersToProcess[i];
+          const tokenId = `GROUPWALKIN-${bookingId}-${i + 1}`;
+          
+          await conn.query(
+            `INSERT INTO additional_visitors (token_id, booking_id, email, expires_at) VALUES (?, ?, ?, ?)`,
+            [tokenId, bookingId, member.email, expiresAt]
+          );
+          
+          companionTokens.push({
+            tokenId,
+            email: member.email
+          });
+        }
       }
     }
 
     conn.release();
     try { await logActivity(req, 'booking.create', { bookingId, date, time, totalVisitors, companions: companionTokens.length }); } catch {}
+    
+    // Send emails for walk-in bookings immediately (only for auto-approved types)
+    if (type === 'individual walk-in' || type === 'group walk-in') {
+      console.log(`Walk-in booking detected: ${type}`);
+      console.log(`Main visitor email: ${mainVisitor.email}`);
+      console.log(`Additional visitors: ${companionTokens.length}`);
+      console.log(`Booking ID: ${bookingId}`);
+      console.log(`Date: ${date}, Time: ${time}`);
+      try {
+        await sendWalkInBookingEmails(bookingId, mainVisitor, companionTokens, date, time);
+        console.log('✅ Walk-in booking emails sent successfully');
+      } catch (emailError) {
+        console.error('❌ Email sending failed:', emailError);
+        console.error('Error details:', emailError.message);
+        // Don't fail the booking if email fails
+      }
+    } else {
+      console.log(`Regular booking type: ${type} - no immediate email sent`);
+    }
+    
     res.json({ 
       success: true, 
       bookingId, 
-      visitorIds: [mainVisitorId], 
+      visitorIds: mainVisitorId ? [mainVisitorId] : [], 
       companionTokens 
     });
   } catch (err) {
@@ -160,20 +364,53 @@ router.put('/bookings/:id/approve', async (req, res) => {
     );
     const booking = bookingRows[0];
 
+    // Check if this is a walk-in type booking
+    const isWalkInScheduling = booking.type === 'walk-in scheduling';
+    const isIndWalkin = booking.type === 'ind-walkin';
+    const isGroupWalkin = booking.type === 'group-walkin';
+
     // 3. Get main visitor's email, name, and institution
-    const [visitorRows] = await pool.query(
-      `SELECT email, first_name, last_name, institution FROM visitors WHERE booking_id = ? AND is_main_visitor = true`,
-      [id]
-    );
-    if (!visitorRows.length || !visitorRows[0].email) {
+    let mainVisitor = null;
+    
+    if (isGroupWalkin) {
+      // For group walk-in, get the primary visitor email from additional_visitors (token ending with -0)
+      const [groupWalkinRows] = await pool.query(
+        `SELECT email FROM additional_visitors WHERE booking_id = ? AND token_id LIKE ?`,
+        [id, `GROUPWALKIN-${id}-0`]
+      );
+      if (groupWalkinRows.length > 0) {
+        mainVisitor = {
+          email: groupWalkinRows[0].email,
+          first_name: '',
+          last_name: '',
+          institution: ''
+        };
+      }
+    } else {
+      // For other booking types, get from visitors table
+      const [visitorRows] = await pool.query(
+        `SELECT email, first_name, last_name, institution FROM visitors WHERE booking_id = ? AND is_main_visitor = true`,
+        [id]
+      );
+      if (visitorRows.length > 0) {
+        mainVisitor = visitorRows[0];
+      }
+    }
+    
+    if (!mainVisitor || !mainVisitor.email) {
       return res.json({ success: true, message: 'Booking approved, but no email sent (no visitor email found).' });
     }
-    const mainVisitor = visitorRows[0];
 
     // 4. Get companions (if any)
     const [companionRows] = await pool.query(
       `SELECT token_id, email FROM additional_visitors WHERE booking_id = ?`,
       [id]
+    );
+
+    const walkInToken = companionRows.find(companion => 
+      companion.token_id.startsWith('WALKIN-') || 
+      companion.token_id.startsWith('INDWALKIN-') ||
+      companion.token_id.startsWith('GROUPWALKIN-')
     );
 
     // 5. Generate QR codes and prepare email content
@@ -190,7 +427,16 @@ router.put('/bookings/:id/approve', async (req, res) => {
         contentType: 'image/png'
     });
 
+    // Get primary visitor ID for backup code
+    const [primaryVisitorRows] = await pool.query(
+      `SELECT visitor_id FROM visitors WHERE booking_id = ? AND is_main_visitor = true`,
+      [id]
+    );
+    
+    const primaryVisitorId = primaryVisitorRows[0]?.visitor_id;
+
     emailContent += `📋 **Primary Visitor QR Code**: Please present this QR code at the museum for check-in.\n\n`;
+    emailContent += `🔑 **Backup Code**: ${primaryVisitorId} (use if QR code doesn't work)\n\n`;
 
     // Create HTML version for primary visitor
     let emailHtml = `
@@ -208,6 +454,17 @@ router.put('/bookings/:id/approve', async (req, res) => {
             <div style="background: #f8f9fa; border-left: 4px solid #007bff; padding: 20px; margin: 25px 0; border-radius: 5px;">
                 <h3 style="margin: 0 0 15px 0; color: #007bff;">📋 Your QR Code</h3>
                 <p style="margin: 0; font-size: 14px;">Your QR code is attached to this email. Please present it at the museum entrance for check-in.</p>
+            </div>
+            
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; margin: 25px 0; border-radius: 5px;">
+                <h3 style="margin: 0 0 15px 0; color: #856404;">🔑 Backup Code</h3>
+                <p style="margin: 0 0 10px 0; font-size: 14px;">If your QR code doesn't work, use this backup code:</p>
+                <div style="background: #f8f9fa; padding: 15px; text-align: center; margin: 10px 0; border-radius: 5px;">
+                    <h2 style="color: #AB8841; font-size: 24px; margin: 0; letter-spacing: 3px; font-family: monospace;">${primaryVisitorId}</h2>
+                </div>
+                <p style="margin: 0; font-size: 12px; color: #856404;">
+                    <strong>Important:</strong> This backup code expires in 24 hours. Use only if QR code scanning fails.
+                </p>
             </div>
     `;
 
@@ -298,6 +555,25 @@ router.put('/bookings/:id/approve', async (req, res) => {
           contentType: 'image/png'
         }];
 
+        // Update companion email content to include their token ID as backup code
+        companionEmailContent += `🔑 **Backup Code**: ${companion.token_id} (use if QR code doesn't work)\n\n`;
+        
+        // Update companion HTML email to include backup code
+        companionEmailHtml = companionEmailHtml.replace(
+          '<p>Thank you!<br>MuseoSmart Team</p>',
+          `<div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 5px;">
+            <h4 style="margin: 0 0 10px 0; color: #856404;">🔑 Backup Code</h4>
+            <p style="margin: 0 0 10px 0; font-size: 14px;">If your QR code doesn't work, use this backup code:</p>
+            <div style="background: #f8f9fa; padding: 10px; text-align: center; margin: 10px 0; border-radius: 5px;">
+                <h2 style="color: #AB8841; font-size: 20px; margin: 0; letter-spacing: 2px; font-family: monospace;">${companion.token_id}</h2>
+            </div>
+            <p style="margin: 0; font-size: 12px; color: #856404;">
+                <strong>Important:</strong> This backup code is shared for the entire group. Use only if QR code scanning fails.
+            </p>
+          </div>
+          <p>Thank you!<br>MuseoSmart Team</p>`
+        );
+
         // Send email to companion
         await transporter.sendMail({
           from: 'MuseoSmart <museoweb1@gmail.com>',
@@ -362,20 +638,148 @@ router.put('/bookings/:id/approve', async (req, res) => {
     </html>
     `;
 
-    // 6. Send email with all QR codes
-    await transporter.sendMail({
-      from: 'MuseoSmart <museoweb1@gmail.com>',
-      to: mainVisitor.email,
-      subject: 'Your Museum Visit is Confirmed! 🎫',
-      text: emailContent,
-      html: emailHtml,
-      attachments: attachments
-    });
+    // 6. Send email based on booking type
+    if (isWalkInScheduling || isIndWalkin) {
+      // Send individual walk-in email
+      const walkInFormUrl = `http://localhost:5173/walkin-visitor?token=${walkInToken.token_id}`;
+      
+              const walkInEmailHtml = `
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #AB8841 0%, #8B6B21 100%); padding: 30px; text-align: center; color: white;">
+                <h1 style="margin: 0; font-size: 28px;">🎫 Your Walk-In Visit is Approved!</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px;">Complete your walk-in registration to get your QR code</p>
+            </div>
+            
+            <div style="padding: 30px; background: #faf7f1;">
+                <h2 style="color: #2e2b41; margin-bottom: 20px;">Hello!</h2>
+                
+                <p style="color: #2e2b41;">Your walk-in museum visit has been <strong>approved</strong> for <strong>${booking.date}</strong> at <strong>${booking.time_slot}</strong>.</p>
+                
+                <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #AB8841;">
+                    <h3 style="color: #AB8841; margin-top: 0;">📋 Complete Your Walk-In Registration</h3>
+                    <p style="color: #2e2b41;">To get your QR code and complete your walk-in visit, please click the link below and fill in your details:</p>
+                    <a href="${walkInFormUrl}" style="display: inline-block; background: #AB8841; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; transition: background-color 0.3s;">Complete Walk-In Registration</a>
+                </div>
+                
+                <div style="background: #f5f4f7; border: 1px solid #2e2b41; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #2e2b41;">📅 Visit Details</h4>
+                    <p style="color: #2e2b41;"><strong>Date:</strong> ${booking.date}</p>
+                    <p style="color: #2e2b41;"><strong>Time:</strong> ${booking.time_slot}</p>
+                    <p style="color: #2e2b41;"><strong>Booking ID:</strong> ${id}</p>
+                    <p style="color: #2e2b41;"><strong>Status:</strong> ✅ Approved</p>
+                </div>
+                
+                <div style="background: #fdf6e3; border: 1px solid #AB8841; border-radius: 5px; padding: 15px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #8B6B21;">⏰ Important Notice</h4>
+                    <p style="margin: 0; font-size: 14px; color: #8B6B21;">
+                        <strong>24-Hour Expiration:</strong> This link will expire in 24 hours. Please complete your profile within this time to receive your QR code.
+                    </p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #AB8841;">
+                    <p style="margin: 0 0 10px 0; font-size: 16px; color: #2e2b41;">Please complete your profile as soon as possible to receive your QR code.</p>
+                    <p style="margin: 0; color: #AB8841;">Best regards,<br><strong>MuseoSmart Team</strong></p>
+                </div>
+            </div>
+        </body>
+        </html>
+      `;
+      
+      await transporter.sendMail({
+        from: 'MuseoSmart <museoweb1@gmail.com>',
+        to: mainVisitor.email,
+        subject: '🎫 Your Walk-In Museum Visit - Complete Your Profile',
+        html: walkInEmailHtml
+      });
+    } else if (isGroupWalkin) {
+      // UNIQUE GROUP WALK-IN LOGIC: Only primary visitor gets email with form link
+      // Additional visitors will get QR codes directly when primary visitor completes form
+      
+      // Find the primary visitor token (ending with -0)
+      const primaryVisitorToken = companionRows.find(companion => 
+        companion.token_id.endsWith('-0')
+      );
+      
+                 if (primaryVisitorToken) {
+             const primaryFormUrl = `http://localhost:5173/group-walkin-leader?token=${primaryVisitorToken.token_id}`;
+        
+        const groupWalkInPrimaryEmailHtml = `
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #AB8841 0%, #8B6B21 100%); padding: 30px; text-align: center; color: white;">
+                <h1 style="margin: 0; font-size: 28px;">🎫 Your Group Walk-In Visit is Approved!</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px;">Complete your group leader registration to get QR codes for everyone</p>
+            </div>
+            
+            <div style="padding: 30px; background: #faf7f1;">
+                <h2 style="color: #2e2b41; margin-bottom: 20px;">Hello Group Leader!</h2>
+                
+                <p style="color: #2e2b41;">Your group walk-in museum visit has been <strong>approved</strong> for <strong>${booking.date}</strong> at <strong>${booking.time_slot}</strong>.</p>
+                
+                <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #AB8841;">
+                    <h3 style="color: #AB8841; margin-top: 0;">📋 Complete Your Group Leader Registration</h3>
+                    <p style="color: #2e2b41;">As the group leader, please complete your registration with ALL details including institution and purpose of visit. This information will be shared with all group members.</p>
+                    <a href="${primaryFormUrl}" style="display: inline-block; background: #AB8841; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; transition: background-color 0.3s;">Complete Group Leader Registration</a>
+                </div>
+                
+                <div style="background: #f5f4f7; border: 1px solid #2e2b41; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #2e2b41;">📅 Visit Details</h4>
+                    <p style="color: #2e2b41;"><strong>Date:</strong> ${booking.date}</p>
+                    <p style="color: #2e2b41;"><strong>Time:</strong> ${booking.time_slot}</p>
+                    <p style="color: #2e2b41;"><strong>Booking ID:</strong> ${id}</p>
+                    <p style="color: #2e2b41;"><strong>Group Size:</strong> ${companionRows.length} visitors</p>
+                    <p style="color: #2e2b41;"><strong>Status:</strong> ✅ Approved</p>
+                </div>
+                
+                <div style="background: #e8f4fd; border: 1px solid #AB8841; border-radius: 5px; padding: 15px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #2e2b41;">👥 Group Information</h4>
+                    <p style="margin: 0; font-size: 14px; color: #2e2b41;">
+                        <strong>Important:</strong> After you complete your registration, all group members will automatically receive their QR codes via email. They will only need to provide their basic details (name, gender, address) - institution and purpose will be inherited from your information.
+                    </p>
+                </div>
+                
+                <div style="background: #fdf6e3; border: 1px solid #AB8841; border-radius: 5px; padding: 15px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #8B6B21;">⏰ Important Notice</h4>
+                    <p style="margin: 0; font-size: 14px; color: #8B6B21;">
+                        <strong>24-Hour Expiration:</strong> This link will expire in 24 hours. Please complete your profile within this time to receive your QR code and send QR codes to group members.
+                    </p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #AB8841;">
+                    <p style="margin: 0 0 10px 0; font-size: 16px; color: #2e2b41;">Please complete your profile as soon as possible to receive your QR code and send QR codes to group members.</p>
+                    <p style="margin: 0; color: #AB8841;">Best regards,<br><strong>MuseoSmart Team</strong></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+        
+        await transporter.sendMail({
+          from: 'MuseoSmart <museoweb1@gmail.com>',
+          to: mainVisitor.email,
+          subject: '🎫 Your Group Walk-In Museum Visit - Complete Group Leader Registration',
+          html: groupWalkInPrimaryEmailHtml
+        });
+      }
+    } else {
+      // Send regular booking email
+      await transporter.sendMail({
+        from: 'MuseoSmart <museoweb1@gmail.com>',
+        to: mainVisitor.email,
+        subject: 'Your Museum Visit is Confirmed! 🎫',
+        text: emailContent,
+        html: emailHtml,
+        attachments: attachments
+      });
+    }
 
     try { await logActivity(req, 'booking.approve', { bookingId: id, emailSent: true, companions: companionRows.length }); } catch {}
     res.json({ 
       success: true, 
-      message: `Booking approved and email sent! ${companionRows.length > 0 ? `Generated ${companionRows.length} companion QR codes.` : ''}` 
+      message: (isWalkInScheduling || isIndWalkin || isGroupWalkin) ? 
+        'Walk-in booking approved and email sent with profile completion link (24-hour expiration)!' : 
+        `Booking approved and email sent! ${companionRows.length > 0 ? `Generated ${companionRows.length} companion QR codes.` : ''}` 
     });
   } catch (err) {
     console.error('Error approving booking:', err);
@@ -481,10 +885,10 @@ router.get('/visit/checkin/:id', async (req, res) => {
       visitor = visitorRows[0];
     }
     
-    // Update visitor status
+    // Update visitor status and check-in time
     if (visitor) {
       await pool.query(
-        `UPDATE visitors SET status = 'visited' WHERE visitor_id = ?`,
+        `UPDATE visitors SET status = 'visited', checkin_time = NOW() WHERE visitor_id = ?`,
         [visitor.visitor_id]
       );
     }
@@ -514,6 +918,14 @@ router.get('/visit/checkin/:id', async (req, res) => {
     
     try { await logActivity(req, 'visitor.checkin', { bookingId: id, visitorId: visitor?.visitor_id }); } catch {}
     
+    // Get the actual check-in time that was just set
+    const [checkinTimeResult] = await pool.query(
+      `SELECT checkin_time FROM visitors WHERE visitor_id = ?`,
+      [visitor.visitor_id]
+    );
+    
+    const actualCheckinTime = checkinTimeResult[0]?.checkin_time;
+    
     res.json({
       success: true,
       message: 'Check-in successful!',
@@ -530,8 +942,9 @@ router.get('/visit/checkin/:id', async (req, res) => {
         name: `${visitor.first_name} ${visitor.last_name}`,
         email: visitor.email,
         gender: visitor.gender,
-        nationality: visitor.nationality,
-        purpose: visitor.purpose
+        visitorType: visitor.visitor_type,
+        purpose: visitor.purpose,
+        checkin_time: actualCheckinTime
       } : null
     });
     
@@ -556,8 +969,10 @@ router.post('/visit/qr-scan', async (req, res) => {
     const qrInfo = JSON.parse(qrData);
     
     if (qrInfo.type === 'additional_visitor') {
-      // Handle additional visitor QR code (token-based)
+      // SEPARATE LOGIC FOR ADDITIONAL VISITORS
       const { tokenId } = qrInfo;
+      
+      console.log('🎯 Processing Additional Visitor QR Code:', tokenId);
       
       // Get additional visitor information
       const [tokenRows] = await pool.query(
@@ -576,6 +991,11 @@ router.post('/visit/qr-scan', async (req, res) => {
       }
       
       const tokenInfo = tokenRows[0];
+      console.log('📋 Token Info:', {
+        status: tokenInfo.status,
+        booking_status: tokenInfo.booking_status,
+        email: tokenInfo.email
+      });
       
       // Check if booking is valid
       if (tokenInfo.booking_status === 'cancelled') {
@@ -604,7 +1024,8 @@ router.post('/visit/qr-scan', async (req, res) => {
         });
       }
       
-      // Update status to checked-in
+      // STEP 1: Update additional_visitors table with check-in time
+      console.log('⏰ Setting check-in time for additional visitor...');
       await pool.query(
         `UPDATE additional_visitors 
          SET status = 'checked-in', checkin_time = NOW()
@@ -612,31 +1033,63 @@ router.post('/visit/qr-scan', async (req, res) => {
         [tokenId]
       );
       
-      // Parse details
+      // STEP 2: Parse visitor details
       const details = tokenInfo.details ? JSON.parse(tokenInfo.details) : {};
+      console.log('📝 Visitor Details:', details);
       
-      // Also insert into visitors table for admin dashboard visibility
-      await pool.query(
-        `INSERT INTO visitors (
-          booking_id, first_name, last_name, gender, address, email, 
-          nationality, purpose, institution, status, is_main_visitor, 
-          checked_in_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'visited', false, ?, NOW())`,
-        [
-          tokenInfo.booking_id,
-          details.firstName || '',
-          details.lastName || '',
-          details.gender || '',
-          details.address || '',
-          tokenInfo.email,
-          details.nationality || '',
-          details.purpose || 'educational',
-          details.institution || '',
-          req.user?.user_ID || null
-        ]
+      // STEP 3: Create/Update visitor record for admin dashboard
+      console.log('👤 Creating visitor record for admin dashboard...');
+      
+      // Check if visitor record already exists
+      const [existingVisitor] = await pool.query(
+        `SELECT visitor_id FROM visitors 
+         WHERE email = ? AND booking_id = ? AND is_main_visitor = false`,
+        [tokenInfo.email, tokenInfo.booking_id]
       );
       
-      // Check if all visitors for this booking are checked in
+      if (existingVisitor.length > 0) {
+        // Update existing visitor record
+        await pool.query(
+          `UPDATE visitors 
+           SET status = 'visited', checkin_time = NOW()
+           WHERE visitor_id = ?`,
+          [existingVisitor[0].visitor_id]
+        );
+        console.log('✅ Updated existing visitor record');
+      } else {
+        // Insert new visitor record
+        await pool.query(
+          `INSERT INTO visitors (
+            booking_id, first_name, last_name, gender, address, email, 
+            visitor_type, purpose, institution, status, is_main_visitor, 
+            checked_in_by, created_at, checkin_time
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'visited', false, ?, NOW(), NOW())`,
+          [
+            tokenInfo.booking_id,
+            details.firstName || '',
+            details.lastName || '',
+            details.gender || '',
+            details.address || '',
+            tokenInfo.email,
+            details.visitorType || '',
+            details.purpose || 'educational',
+            details.institution || '',
+            req.user?.user_ID || null
+          ]
+        );
+        console.log('✅ Created new visitor record');
+      }
+      
+      // STEP 4: Get the actual check-in time that was just set
+      const [checkinTimeResult] = await pool.query(
+        `SELECT checkin_time FROM additional_visitors WHERE token_id = ?`,
+        [tokenId]
+      );
+      
+      const actualCheckinTime = checkinTimeResult[0].checkin_time;
+      console.log('📅 Actual check-in time:', actualCheckinTime);
+      
+      // STEP 5: Check if all visitors are checked in (for booking status)
       const [allVisitors] = await pool.query(
         `SELECT 
           (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = true) as main_visitors,
@@ -651,16 +1104,32 @@ router.post('/visit/qr-scan', async (req, res) => {
       const totalVisitors = visitorCount.main_visitors + visitorCount.additional_visitors;
       const checkedInVisitors = visitorCount.main_checked_in + visitorCount.additional_checked_in;
       
-      // If all visitors are checked in, update booking status to 'checked-in'
+      console.log('📊 Visitor Count:', {
+        total: totalVisitors,
+        checkedIn: checkedInVisitors,
+        mainVisitors: visitorCount.main_visitors,
+        mainCheckedIn: visitorCount.main_checked_in,
+        additionalVisitors: visitorCount.additional_visitors,
+        additionalCheckedIn: visitorCount.additional_checked_in
+      });
+      
+      // If all visitors are checked in, update booking status
       if (totalVisitors > 0 && checkedInVisitors >= totalVisitors) {
         await pool.query(
-          `UPDATE bookings SET status = 'checked-in', checkin_time = NOW() WHERE booking_id = ?`,
+          `UPDATE bookings SET status = 'checked-in' WHERE booking_id = ?`,
           [tokenInfo.booking_id]
         );
+        console.log('✅ All visitors checked in - updated booking status');
       }
       
-      try { await logActivity(req, 'additional_visitor.checkin', { tokenId, bookingId: tokenInfo.booking_id }); } catch {}
+      // STEP 6: Log activity
+      try { 
+        await logActivity(req, 'additional_visitor.checkin', { tokenId, bookingId: tokenInfo.booking_id }); 
+      } catch (error) {
+        console.log('⚠️ Activity logging failed:', error.message);
+      }
       
+      // STEP 7: Return success response
       res.json({
         success: true,
         message: 'Additional visitor checked in successfully!',
@@ -669,15 +1138,17 @@ router.post('/visit/qr-scan', async (req, res) => {
           lastName: details.lastName,
           email: tokenInfo.email,
           gender: details.gender,
-          nationality: details.nationality,
+          visitorType: details.visitorType,
           address: details.address,
           institution: details.institution || 'N/A',
           groupLeader: qrInfo.groupLeader || 'N/A',
           visitDate: tokenInfo.visit_date,
           visitTime: tokenInfo.time_slot,
-          checkin_time: new Date().toISOString()
+          checkin_time: actualCheckinTime ? actualCheckinTime.toISOString() : new Date().toISOString()
         }
       });
+      
+      console.log('🎉 Additional visitor check-in completed successfully!');
       
     } else if (qrInfo.type === 'primary_visitor') {
       // Handle legacy primary visitor QR code
@@ -718,9 +1189,9 @@ router.post('/visit/qr-scan', async (req, res) => {
         });
       }
       
-      // Update visitor status to visited
+      // Update visitor status to visited and set check-in time
       await pool.query(
-        `UPDATE visitors SET status = 'visited' WHERE visitor_id = ?`,
+        `UPDATE visitors SET status = 'visited', checkin_time = NOW() WHERE visitor_id = ?`,
         [visitorId]
       );
       
@@ -749,6 +1220,14 @@ router.post('/visit/qr-scan', async (req, res) => {
       
       try { await logActivity(req, 'visitor.checkin', { bookingId: visitor.booking_id, visitorId }); } catch {}
       
+      // Get the actual check-in time from the database
+      const [checkinTimeResult] = await pool.query(
+        `SELECT checkin_time FROM visitors WHERE visitor_id = ?`,
+        [visitorId]
+      );
+      
+      const actualCheckinTime = checkinTimeResult[0].checkin_time;
+      
       res.json({
         success: true,
         message: 'Primary visitor checked in successfully!',
@@ -757,18 +1236,55 @@ router.post('/visit/qr-scan', async (req, res) => {
           last_name: visitor.last_name,
           email: visitor.email,
           gender: visitor.gender,
-          nationality: visitor.nationality,
+          visitorType: visitor.visitor_type,
           address: visitor.address,
           visit_date: visitor.visit_date,
           visit_time: visitor.time_slot,
-          checkin_time: new Date().toISOString()
+          checkin_time: actualCheckinTime ? actualCheckinTime.toISOString() : new Date().toISOString()
         }
       });
       
+         } else if (qrInfo.type === 'walkin_visitor') {
+           // Handle walk-in visitor QR code
+           const { visitorId } = qrInfo;
+           
+           console.log('🎯 Processing Walk-in Visitor QR Code:', visitorId);
+           
+           // Call the walk-in visitor check-in endpoint
+           const checkinUrl = `${req.protocol}://${req.get('host')}/api/walkin-visitors/${visitorId}/checkin`;
+           console.log('🌐 Walk-in check-in URL:', checkinUrl);
+           
+           const checkinResponse = await fetch(checkinUrl, {
+             method: 'POST',
+             headers: {
+               'Content-Type': 'application/json',
+             }
+           });
+           
+           console.log('📡 Walk-in check-in response status:', checkinResponse.status);
+           
+           if (!checkinResponse.ok) {
+             const errorData = await checkinResponse.json();
+             console.error('❌ Walk-in check-in failed:', errorData);
+             return res.status(checkinResponse.status).json({
+               success: false,
+               error: errorData.error || 'Failed to check in walk-in visitor'
+             });
+           }
+           
+           const checkinData = await checkinResponse.json();
+           console.log('✅ Walk-in check-in success:', checkinData);
+           
+           res.json({
+             success: true,
+             message: checkinData.message,
+             visitor: checkinData.visitor
+           });
+           
          } else {
        return res.status(400).json({ 
          success: false, 
-         error: 'Invalid QR code type. Expected "additional_visitor" or "primary_visitor".' 
+         error: 'Invalid QR code type. Expected "additional_visitor", "primary_visitor", or "walkin_visitor".' 
        });
      }
     

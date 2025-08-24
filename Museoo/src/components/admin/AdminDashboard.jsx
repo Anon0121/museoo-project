@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import logo from "../../assets/logo.png";
 import api from "../../config/api";
 
 import Dashboard from "./Dashboard";
@@ -14,7 +13,10 @@ import Settings from "./settings";
 import AddUser from "./AddUser";
 import CulturalObjects from "./CulturalObjects";
 import VisitorScanner from "./VisitorScanner";
+import EventParticipantScanner from "./EventParticipantScanner";
 import Reports from "./Reports";
+import PromotionalManagement from "./PromotionalManagement";
+
 
 const AdminDashboard = () => {
   const [user, setUser] = useState(null);
@@ -115,6 +117,7 @@ const AdminDashboard = () => {
         exhibit: { allowed: true, access: 'edit' },
         event: { allowed: true, access: 'edit' },
         cultural_objects: { allowed: true, access: 'edit' },
+        promotional: { allowed: true, access: 'edit' },
         archive: { allowed: true, access: 'edit' },
         donation: { allowed: true, access: 'edit' },
         reports: { allowed: true, access: 'edit' },
@@ -129,6 +132,7 @@ const AdminDashboard = () => {
         exhibit: { allowed: false, access: 'none' },
         event: { allowed: false, access: 'none' },
         cultural_objects: { allowed: false, access: 'none' },
+        promotional: { allowed: false, access: 'none' },
         archive: { allowed: false, access: 'none' },
         donation: { allowed: true, access: 'view' },
         reports: { allowed: true, access: 'view' },
@@ -150,6 +154,7 @@ const AdminDashboard = () => {
     { name: "Exhibit", icon: "fa-eye", permission: "exhibit" },
     { name: "Event", icon: "fa-calendar-week", permission: "event" },
     { name: "CulturalObjects", icon: "fa-landmark", permission: "cultural_objects" },
+    { name: "Promotional", icon: "fa-star", permission: "promotional" },
     { name: "Archive", icon: "fa-box-archive", permission: "archive" },
     { name: "Donation", icon: "fa-hand-holding-dollar", permission: "donation" },
     { name: "Reports", icon: "fa-chart-bar", permission: "reports" },
@@ -345,13 +350,15 @@ const AdminDashboard = () => {
         {/* Main content area */}
         <main className="flex-1 p-3 sm:p-4 md:p-6 bg-gray-50 overflow-auto">
           <div className="max-w-full">
-            {activeTab === "Dashboard" && <Dashboard userPermissions={userPermissions} setActiveTab={setActiveTab} />}
-            {activeTab === "Schedule" && <Schedule userPermissions={userPermissions} />}
-            {activeTab === "Visitors" && <Visitors userPermissions={userPermissions} />}
+                    {activeTab === "Dashboard" && <Dashboard userPermissions={userPermissions} setActiveTab={setActiveTab} />}
+        {activeTab === "Schedule" && <Schedule userPermissions={userPermissions} />}
+        {activeTab === "Visitors" && <Visitors userPermissions={userPermissions} />}
             {activeTab === "Scanner" && <VisitorScanner userPermissions={userPermissions} />}
             {activeTab === "Exhibit" && <Exhibit userPermissions={userPermissions} />}
             {activeTab === "Event" && <Event userPermissions={userPermissions} />}
+            {activeTab === "eventScanner" && <EventParticipantScanner userPermissions={userPermissions} />}
             {activeTab === "CulturalObjects" && <CulturalObjects userPermissions={userPermissions} />}
+            {activeTab === "Promotional" && <PromotionalManagement />}
             {activeTab === "Archive" && <Archive userPermissions={userPermissions} />}
             {activeTab === "Donation" && <Donation userPermissions={userPermissions} />}
             {activeTab === "Reports" && <Reports userPermissions={userPermissions} />}

@@ -20,3 +20,8 @@ CREATE INDEX idx_additional_visitors_booking ON additional_visitors(booking_id);
 CREATE INDEX idx_additional_visitors_email ON additional_visitors(email);
 
 
+
+
+
+
+

@@ -7,6 +7,7 @@ const Exhibits = () => {
   const [activeTab, setActiveTab] = useState('upcoming');
   const [selectedExhibit, setSelectedExhibit] = useState(null);
 
+
   useEffect(() => {
     fetchExhibits();
   }, []);
@@ -14,7 +15,12 @@ const Exhibits = () => {
   const fetchExhibits = async () => {
     try {
       const response = await api.get('/api/activities/exhibits');
-      setExhibits(response.data);
+      // Map the data to handle single image
+      const mappedExhibits = response.data.map(exhibit => ({
+        ...exhibit,
+        image: exhibit.images && exhibit.images.length > 0 ? exhibit.images[0] : null
+      }));
+      setExhibits(mappedExhibits);
     } catch (error) {
       console.error('Error fetching exhibits:', error);
     } finally {
@@ -54,20 +60,23 @@ const Exhibits = () => {
     >
       {/* Image Section */}
       <div className="relative h-48 overflow-hidden">
-        {exhibit.images && exhibit.images.length > 0 ? (
+        {exhibit.image ? (
           <img
-            src={`${api.defaults.baseURL}${exhibit.images[0]}`}
+            src={`${api.defaults.baseURL}${exhibit.image}`}
             alt={exhibit.title}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={(e) => {
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'flex';
+            }}
           />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#8B6B21]/20 to-[#D4AF37]/20 flex items-center justify-center">
-            <svg className="w-16 h-16 text-[#8B6B21]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </div>
-        )}
-        <div className="absolute top-4 left-4">
+        ) : null}
+        <div className="w-full h-full bg-gradient-to-br from-[#8B6B21]/20 to-[#D4AF37]/20 flex items-center justify-center" style={{ display: exhibit.image ? 'none' : 'flex' }}>
+          <svg className="w-16 h-16 text-[#8B6B21]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        </div>
+        <div className="absolute top-4 left-4 z-10">
           <span className="px-3 py-1 bg-[#8B6B21] text-white rounded-full text-xs font-semibold">
             {activeTab === 'upcoming' ? 'Coming Soon' : 'Now Showing'}
           </span>
@@ -112,7 +121,10 @@ const Exhibits = () => {
           {exhibit.description}
         </p>
 
-        <button className="w-full bg-gradient-to-r from-[#8B6B21] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#8B6B21] text-white py-3 px-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105">
+        <button 
+          onClick={() => setSelectedExhibit(exhibit)}
+          className="w-full bg-gradient-to-r from-[#8B6B21] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#8B6B21] text-white py-3 px-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105"
+        >
           View Details
         </button>
       </div>
@@ -253,13 +265,24 @@ const Exhibits = () => {
                 {/* Modal Content */}
                 <div className="p-6">
                   {/* Exhibit Image */}
-                  {selectedExhibit.images && selectedExhibit.images.length > 0 && (
+                  {selectedExhibit.image && (
                     <div className="mb-6">
-                      <img
-                        src={`${api.defaults.baseURL}${selectedExhibit.images[0]}`}
-                        alt={selectedExhibit.title}
-                        className="w-full h-64 object-cover rounded-xl"
-                      />
+                      <div className="relative h-64 md:h-80 overflow-hidden rounded-xl">
+                        <img
+                          src={`${api.defaults.baseURL}${selectedExhibit.image}`}
+                          alt={selectedExhibit.title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                        <div className="w-full h-full bg-gradient-to-br from-[#8B6B21]/20 to-[#D4AF37]/20 flex items-center justify-center" style={{ display: 'none' }}>
+                          <svg className="w-16 h-16 text-[#8B6B21]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                          </svg>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -329,6 +352,8 @@ const Exhibits = () => {
             </div>
           </div>
         )}
+
+
       </div>
     </section>
   );

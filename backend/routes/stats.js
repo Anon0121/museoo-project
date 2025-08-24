@@ -38,14 +38,23 @@ router.get('/summary', async (req, res) => {
       // Count archives
       pool.query('SELECT COUNT(*) AS count FROM archives'),
       
-      // Get recent bookings (last 5)
-      pool.query(`
-        SELECT b.*, v.first_name, v.last_name 
-        FROM bookings b 
-        LEFT JOIN visitors v ON b.booking_id = v.booking_id AND v.is_main_visitor = 1
-        ORDER BY b.created_at DESC 
-        LIMIT 5
-      `),
+             // Get recent bookings with detailed information (last 5)
+       pool.query(`
+         SELECT 
+           b.*, 
+           v.first_name, 
+           v.last_name,
+           v.email,
+           v.institution,
+           v.visitor_type,
+           COUNT(av.token_id) as additional_visitors
+         FROM bookings b 
+         LEFT JOIN visitors v ON b.booking_id = v.booking_id AND v.is_main_visitor = 1
+         LEFT JOIN additional_visitors av ON b.booking_id = av.booking_id
+         GROUP BY b.booking_id
+         ORDER BY b.created_at DESC 
+         LIMIT 5
+       `),
       
       // Get recent donations (last 5)
       pool.query(`
@@ -78,11 +87,30 @@ router.get('/summary', async (req, res) => {
     const [
       todayVisitors,
       todayBookings,
-      pendingDonations
+      pendingDonations,
+      todayScheduleVisits
     ] = await Promise.all([
       pool.query('SELECT COUNT(*) AS count FROM visitors WHERE DATE(created_at) = ? AND is_main_visitor = 1', [today]),
       pool.query('SELECT COUNT(*) AS count FROM bookings WHERE DATE(created_at) = ?', [today]),
-      pool.query('SELECT COUNT(*) AS count FROM donations WHERE status = "pending"')
+      pool.query('SELECT COUNT(*) AS count FROM donations WHERE status = "pending"'),
+             // Get today's schedule visits with detailed information
+       pool.query(`
+         SELECT 
+           b.*, 
+           v.first_name, 
+           v.last_name,
+           v.email,
+           v.institution,
+           v.visitor_type,
+           COUNT(av.token_id) as additional_visitors
+         FROM bookings b 
+         LEFT JOIN visitors v ON b.booking_id = v.booking_id AND v.is_main_visitor = 1
+         LEFT JOIN additional_visitors av ON b.booking_id = av.booking_id
+         WHERE DATE(b.date) = ?
+         GROUP BY b.booking_id
+         ORDER BY b.time_slot ASC
+         LIMIT 10
+       `, [today])
     ]);
 
     res.json({
@@ -103,7 +131,8 @@ router.get('/summary', async (req, res) => {
       // Recent activity
       recentBookings: recentBookings[0],
       recentDonations: recentDonations[0],
-      recentActivities: recentActivities[0]
+      recentActivities: recentActivities[0],
+      todayScheduleVisits: todayScheduleVisits[0]
     });
   } catch (err) {
     console.error('Stats error:', err);

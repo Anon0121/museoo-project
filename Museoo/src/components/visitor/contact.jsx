@@ -19,29 +19,7 @@ const Contact = () => {
         <div className="grid lg:grid-cols-2 gap-12">
           {/* Contact Information */}
           <div className="space-y-8">
-            {/* Location Card */}
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-center mb-6">
-                <div className="w-12 h-12 bg-gradient-to-br from-[#8B6B21] to-[#D4AF37] rounded-xl flex items-center justify-center mr-4">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800">Location</h3>
-              </div>
-              <div className="space-y-4">
-                <p className="text-gray-600 text-lg">
-                  <strong>Address:</strong><br />
-                  Gaston Park, Cagayan de Oro City<br />
-                  Misamis Oriental, Philippines
-                </p>
-                <p className="text-gray-600 text-lg">
-                  <strong>Landmark:</strong><br />
-                  Beside the historic Gaston Park, near the City Hall
-                </p>
-              </div>
-            </div>
+            
 
             {/* Contact Details */}
             <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 hover:shadow-2xl transition-all duration-300">
@@ -115,39 +93,7 @@ const Contact = () => {
               </div>
             </div>
 
-            {/* Additional Info */}
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-center mb-6">
-                <div className="w-12 h-12 bg-gradient-to-br from-[#8B6B21] to-[#D4AF37] rounded-xl flex items-center justify-center mr-4">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800">Planning Your Visit</h3>
-              </div>
-              <ul className="space-y-3 text-gray-600">
-                <li className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-[#8B6B21] rounded-full mt-2 flex-shrink-0"></div>
-                  <span>Free admission for all visitors</span>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-[#8B6B21] rounded-full mt-2 flex-shrink-0"></div>
-                  <span>Guided tours available upon request</span>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-[#8B6B21] rounded-full mt-2 flex-shrink-0"></div>
-                  <span>Photography allowed (no flash)</span>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-[#8B6B21] rounded-full mt-2 flex-shrink-0"></div>
-                  <span>Wheelchair accessible facilities</span>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-[#8B6B21] rounded-full mt-2 flex-shrink-0"></div>
-                  <span>Parking available nearby</span>
-                </li>
-              </ul>
-            </div>
+
           </div>
 
           {/* Map Section */}

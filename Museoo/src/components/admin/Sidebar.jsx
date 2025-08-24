@@ -1,5 +1,5 @@
 import React from "react";
-import { FaHouse, FaCalendar, FaUsers, FaEye, FaCalendarWeek, FaBoxArchive, FaHandHoldingDollar, FaGear, FaUserPlus, FaRightFromBracket } from "react-icons/fa6";
+import { FaHouse, FaCalendar, FaUsers, FaEye, FaCalendarWeek, FaBoxArchive, FaHandHoldingDollar, FaGear, FaUserPlus, FaRightFromBracket, FaQrcode } from "react-icons/fa6";
 
 const Sidebar = ({ isOpen, onNavigate, onLogout, activeTab }) => {
   const menuItems = [
@@ -8,6 +8,7 @@ const Sidebar = ({ isOpen, onNavigate, onLogout, activeTab }) => {
     { name: "Visitors", icon: <FaUsers />, key: "visitors" },
     { name: "Exhibit", icon: <FaEye />, key: "exhibit" },
     { name: "Events", icon: <FaCalendarWeek />, key: "events" },
+    { name: "Event Scanner", icon: <FaQrcode />, key: "eventScanner" },
     { name: "Archive", icon: <FaBoxArchive />, key: "archive" },
     { name: "Donation", icon: <FaHandHoldingDollar />, key: "donation" },
     { name: "Settings", icon: <FaGear />, key: "settings" },

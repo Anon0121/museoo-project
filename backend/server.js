@@ -21,7 +21,9 @@ ensureActivityLogTable().catch(err => console.error('Activity log table ensure f
 // Allow both local and Vercel frontend
 const allowedOrigins = [
   'http://localhost:5173',
+  'http://localhost:5175',
   'http://127.0.0.1:5173',
+  'http://127.0.0.1:5175',
   'http://192.168.1.4:5173',
   'http://192.168.56.1:5173',
   'http://192.168.1.6:5173',
@@ -526,6 +528,12 @@ app.use('/api/activities', require('./routes/activities'));
 app.use('/api/cultural-objects', require('./routes/cultural-objects'));
 app.use('/api/visitors', require('./routes/visitors'));
 app.use('/api/additional-visitors', require('./routes/additional-visitors'));
+app.use('/api/walkin-visitors', require('./routes/walkin-visitors'));
+app.use('/api/group-walkin-leaders', require('./routes/group-walkin-leaders'));
+app.use('/api/group-walkin-members', require('./routes/group-walkin-members'));
+app.use('/api/backup-codes', require('./routes/backup-codes'));
+
+
 
 const archiveRoutes = require('./routes/archive');
 app.use('/api/archives', archiveRoutes);
@@ -533,6 +541,8 @@ app.use('/uploads/archives', express.static(__dirname + '/uploads/archives'));
 
 app.use('/api/donations', require('./routes/donations'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/promotional', require('./routes/promotional'));
+app.use('/api/event-registrations', require('./routes/event-registrations'));
 
 const statsRouter = require('./routes/stats');
 app.use('/api/stats', statsRouter);

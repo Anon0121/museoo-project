@@ -12,23 +12,35 @@ router.get('/all', async (req, res) => {
         v.first_name,
         v.last_name,
         v.gender,
-        v.nationality,
+        v.visitor_type,
         v.address,
         v.email,
         v.purpose,
         v.status,
         v.created_at,
-        COALESCE(b.checkin_time, 'Not checked in') as checkin_time,
+        v.checkin_time,
         b.date as visit_date,
         b.time_slot,
         CASE 
           WHEN v.is_main_visitor = 1 THEN 'Primary Visitor'
+          WHEN b.type IN ('ind-walkin', 'group-walkin') THEN 'Walk-in Visitor'
           ELSE 'Additional Visitor'
-        END as visitor_type
+        END as visitor_type,
+        b.type as booking_type
       FROM visitors v
       LEFT JOIN bookings b ON v.booking_id = b.booking_id
-      ORDER BY v.created_at DESC
+      WHERE v.checkin_time IS NOT NULL
+      ORDER BY v.checkin_time DESC
     `);
+    
+    // Debug: Log check-in times
+    console.log('🔍 Visitors check-in times debug:');
+    visitors.forEach((visitor, index) => {
+      console.log(`Visitor ${index + 1}: ${visitor.first_name} ${visitor.last_name}`);
+      console.log(`  - Status: ${visitor.status}`);
+      console.log(`  - Check-in time: ${visitor.checkin_time}`);
+      console.log(`  - Check-in time type: ${typeof visitor.checkin_time}`);
+    });
     
     res.json({ 
       success: true, 
@@ -80,13 +92,13 @@ router.get('/:visitorId', async (req, res) => {
         v.first_name,
         v.last_name,
         v.gender,
-        v.nationality,
+        v.visitor_type,
         v.address,
         v.email,
         v.purpose,
         v.status,
         v.created_at,
-        b.checkin_time,
+        v.checkin_time,
         b.date as visit_date,
         b.time_slot,
         b.booking_id
@@ -133,34 +145,34 @@ router.post('/checkin/:visitorId', async (req, res) => {
       });
     }
     
-    // Update visitor status to visited
+    // Update visitor status to visited and set individual check-in time
     await pool.query(
-      'UPDATE visitors SET status = "visited" WHERE visitor_id = ?',
+      'UPDATE visitors SET status = "visited", checkin_time = NOW() WHERE visitor_id = ?',
       [visitorId]
     );
     
-    // Update booking checkin_time and status
+    // Update booking status (but not checkin_time - keep individual times)
     await pool.query(`
       UPDATE bookings b 
       JOIN visitors v ON b.booking_id = v.booking_id 
-      SET b.checkin_time = NOW(), b.status = 'checked-in'
+      SET b.status = 'checked-in'
       WHERE v.visitor_id = ?
     `, [visitorId]);
     
-    // Get updated visitor information
+    // Get updated visitor information with individual check-in time
     const [updatedVisitor] = await pool.query(`
       SELECT 
         v.visitor_id,
         v.first_name,
         v.last_name,
         v.gender,
-        v.nationality,
+        v.visitor_type,
         v.address,
         v.email,
         v.purpose,
         v.status,
         v.created_at,
-        b.checkin_time,
+        v.checkin_time,
         b.date as visit_date,
         b.time_slot
       FROM visitors v
@@ -172,7 +184,10 @@ router.post('/checkin/:visitorId', async (req, res) => {
     res.json({ 
       success: true, 
       message: 'Visitor checked in successfully',
-      visitor: updatedVisitor[0]
+      visitor: {
+        ...updatedVisitor[0],
+        checkin_time: updatedVisitor[0].checkin_time ? updatedVisitor[0].checkin_time.toISOString() : null
+      }
     });
   } catch (err) {
     console.error('Error checking in visitor:', err);
@@ -187,7 +202,7 @@ router.post('/checkin/:visitorId', async (req, res) => {
 router.put('/:visitorId', async (req, res) => {
   try {
     const { visitorId } = req.params;
-    const { firstName, lastName, gender, address, email, nationality, institution, purpose } = req.body;
+    const { firstName, lastName, gender, address, email, visitorType, institution, purpose } = req.body;
     
     // First, get visitor information to ensure it exists
     const [visitor] = await pool.query(
@@ -206,9 +221,9 @@ router.put('/:visitorId', async (req, res) => {
     await pool.query(`
       UPDATE visitors 
       SET first_name = ?, last_name = ?, gender = ?, address = ?, 
-          email = ?, nationality = ?, purpose = ?
+          email = ?, visitor_type = ?, purpose = ?
       WHERE visitor_id = ?
-    `, [firstName, lastName, gender, address, email, nationality, purpose, visitorId]);
+    `, [firstName, lastName, gender, address, email, visitorType, purpose, visitorId]);
     
     // If institution is provided, we might want to store it in a separate field
     // For now, we'll store it in the purpose field or create a new field if needed
@@ -229,7 +244,7 @@ router.put('/:visitorId', async (req, res) => {
         v.first_name,
         v.last_name,
         v.gender,
-        v.nationality,
+        v.visitor_type,
         v.address,
         v.email,
         v.purpose,
