@@ -341,7 +341,7 @@ const GroupWalkInForm = () => {
                   </div>
                 </div>
                 <div>
-                                     <label className="block text-[#2e2b41] font-semibold mb-3">Nationality *</label>
+                                     <label className="block text-[#2e2b41] font-semibold mb-3">Visitor Type *</label>
                   <div className="flex flex-wrap gap-4">
                     <label className="flex items-center">
                                              <input

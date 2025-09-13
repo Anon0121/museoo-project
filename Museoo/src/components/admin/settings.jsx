@@ -15,6 +15,12 @@ const Settings = () => {
     confirmPassword: "",
   });
 
+  const [showPasswords, setShowPasswords] = useState({
+    oldPassword: false,
+    newPassword: false,
+    confirmPassword: false,
+  });
+
   const [profileForm, setProfileForm] = useState({
     firstname: "",
     lastname: "",
@@ -22,6 +28,13 @@ const Settings = () => {
   });
 
   const [message, setMessage] = useState({ type: "", text: "" });
+  const [notification, setNotification] = useState({
+    show: false,
+    type: 'success',
+    title: '',
+    message: '',
+    description: ''
+  });
 
   // Fetch user data
   const fetchUser = async () => {
@@ -76,18 +89,37 @@ const Settings = () => {
     setMessage({ type: "", text: "" });
   };
 
+  const togglePasswordVisibility = (field) => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        setMessage({ type: "error", text: "Please select an image file" });
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Invalid File Type',
+          message: '❌ Please select an image file',
+          description: 'Only image files (JPG, PNG, GIF, etc.) are allowed for profile photos.'
+        });
         return;
       }
       
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        setMessage({ type: "error", text: "File size must be less than 5MB" });
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'File Too Large',
+          message: '❌ File size must be less than 5MB',
+          description: 'Please choose a smaller image file to upload as your profile photo.'
+        });
         return;
       }
 
@@ -104,7 +136,13 @@ const Settings = () => {
 
   const handlePhotoUpload = async () => {
     if (!selectedFile) {
-      setMessage({ type: "error", text: "Please select a file to upload" });
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'No File Selected',
+        message: '❌ Please select a file to upload',
+        description: 'Choose an image file before clicking the upload button.'
+      });
       return;
     }
 
@@ -119,15 +157,33 @@ const Settings = () => {
       });
 
       if (res.data.success) {
-        setMessage({ type: "success", text: "Profile photo updated successfully!" });
+        setNotification({
+          show: true,
+          type: 'success',
+          title: 'Profile Photo Updated!',
+          message: '✅ Your profile photo has been updated successfully!',
+          description: 'The changes will be visible immediately.'
+        });
         setSelectedFile(null);
         fetchUser(); // Refresh user data
       } else {
-        setMessage({ type: "error", text: res.data.message || "Failed to upload photo" });
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Photo Upload Failed',
+          message: '❌ Failed to upload profile photo',
+          description: res.data.message || "Please try again with a different image."
+        });
       }
     } catch (err) {
       console.error("❌ Upload error:", err);
-      setMessage({ type: "error", text: "Failed to upload photo" });
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Photo Upload Error',
+        message: '❌ Failed to upload profile photo',
+        description: err.response?.data?.message || err.message || "Network error. Please check your connection."
+      });
     }
   };
 
@@ -135,7 +191,13 @@ const Settings = () => {
     e.preventDefault();
     
     if (!profileForm.firstname || !profileForm.lastname) {
-      setMessage({ type: "error", text: "Please fill in all required fields" });
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Validation Error',
+        message: '❌ Please fill in all required fields',
+        description: 'First name and last name are required to update your profile.'
+      });
       return;
     }
 
@@ -147,15 +209,40 @@ const Settings = () => {
       });
 
       if (res.data.success) {
-        setMessage({ type: "success", text: "Profile updated successfully!" });
+        setNotification({
+          show: true,
+          type: 'success',
+          title: 'Profile Updated Successfully!',
+          message: '✅ Your profile information has been updated!',
+          description: 'The changes have been saved and will be visible immediately.'
+        });
         setIsEditing(false);
         fetchUser(); // Refresh user data
+        
       } else {
-        setMessage({ type: "error", text: res.data.message || "Failed to update profile" });
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Profile Update Failed',
+          message: '❌ Failed to update profile',
+          description: res.data.message || "Please check your information and try again."
+        });
+        
       }
     } catch (err) {
       console.error("❌ Update error:", err);
-      setMessage({ type: "error", text: "Failed to update profile" });
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Profile Update Error',
+        message: '❌ Failed to update profile',
+        description: err.response?.data?.message || err.message || "Network error. Please check your connection."
+      });
+      
+      // Auto-hide notification after 5 seconds
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 5000);
     }
   };
 
@@ -169,49 +256,134 @@ const Settings = () => {
     return errors;
   };
 
+  const getPasswordRequirements = (password) => {
+    return {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[!@#$%^&*]/.test(password)
+    };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setMessage({ type: "", text: "" }); // Clear any previous messages
 
     const { oldPassword, newPassword, confirmPassword } = form;
 
+    console.log("🔐 Password change attempt started");
+    console.log("📋 Form data:", { oldPassword: oldPassword ? "***" : "empty", newPassword: newPassword ? "***" : "empty", confirmPassword: confirmPassword ? "***" : "empty" });
+
     if (!oldPassword || !newPassword || !confirmPassword) {
-      setMessage({ type: "error", text: "All fields are required." });
+      console.log("❌ Validation failed: Missing fields");
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Validation Error',
+        message: '❌ All fields are required',
+        description: 'Please fill in all password fields before submitting.'
+      });
       setLoading(false);
+      
+      // Auto-hide notification after 5 seconds
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 5000);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setMessage({ type: "error", text: "New passwords do not match." });
+      console.log("❌ Validation failed: Passwords don't match");
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Password Mismatch',
+        message: '❌ New passwords do not match',
+        description: 'Please make sure both new password fields contain the same password.'
+      });
       setLoading(false);
+      
+      // Auto-hide notification after 5 seconds
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 5000);
       return;
     }
 
     const passwordErrors = validatePasswordStrength(newPassword);
     if (passwordErrors.length > 0) {
-      setMessage({ 
-        type: "error", 
-        text: "Password must meet the following:\n" + passwordErrors.map((e) => `• ${e}`).join("\n")
+      console.log("❌ Validation failed: Password strength issues", passwordErrors);
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Password Requirements Not Met',
+        message: '❌ Password must meet the following requirements:',
+        description: passwordErrors.map((e) => `• ${e}`).join('\n')
       });
       setLoading(false);
+      
+      // Auto-hide notification after 5 seconds
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 5000);
       return;
     }
 
     try {
+      console.log("🌐 Making API call to /api/change-password");
       const res = await api.post("/api/change-password", {
         currentPassword: oldPassword,
         newPassword: newPassword,
       });
 
+      console.log("📡 API Response:", res.data);
+
       if (res.data.success) {
-        setMessage({ type: "success", text: "Password updated successfully!" });
+        console.log("✅ Password updated successfully");
+        setNotification({
+          show: true,
+          type: 'success',
+          title: 'Password Updated Successfully!',
+          message: '✅ Your password has been changed successfully!',
+          description: 'Please log in again with your new password to ensure security.'
+        });
         setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+        
       } else {
-        setMessage({ type: "error", text: res.data.message || "Failed to update password" });
+        console.log("❌ API returned success: false", res.data.message);
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Password Update Failed',
+          message: '❌ Failed to update password',
+          description: res.data.message || "Please check your current password and try again."
+        });
+        
       }
     } catch (err) {
       console.error("❌ Change password error:", err);
-      setMessage({ type: "error", text: "Failed to update password" });
+      console.error("❌ Error details:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        statusText: err.response?.statusText
+      });
+      
+      const errorMessage = err.response?.data?.message || err.message || "Failed to update password";
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Password Update Error',
+        message: '❌ Failed to update password',
+        description: errorMessage
+      });
+      
+      // Auto-hide notification after 5 seconds
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 5000);
     } finally {
       setLoading(false);
     }
@@ -231,48 +403,84 @@ const Settings = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-        <div className="flex items-center">
-          <div className="w-12 h-12 bg-[#AB8841] rounded-full flex items-center justify-center mr-4">
-            <i className="fa-solid fa-gear text-white text-xl"></i>
+      <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
+        <div className="flex items-center space-x-3 sm:space-x-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{background: 'linear-gradient(135deg, #E5B80B, #D4AF37)'}}>
+            <i className="fa-solid fa-gear text-white text-lg sm:text-xl"></i>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-[#2e2b41] mb-2">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 sm:mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
               Account Settings
             </h1>
-            <p className="text-gray-600">Manage your account security and preferences</p>
+            <p className="text-gray-600 text-sm sm:text-base" style={{fontFamily: 'Telegraf, sans-serif'}}>
+              Manage your account security and preferences
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Message */}
-      {message.text && (
-        <div className={`p-4 rounded-lg ${
-          message.type === "error" 
-            ? "bg-red-100 text-red-800 border border-red-200" 
-            : "bg-green-100 text-green-800 border border-green-200"
-        }`}>
-          <div className="flex items-center">
-            <i className={`fa-solid ${
-              message.type === "error" ? "fa-exclamation-circle" : "fa-check-circle"
-            } mr-2`}></i>
-            <span className="whitespace-pre-wrap">{message.text}</span>
+      {/* Custom Notification */}
+      {notification.show && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100 opacity-100 border-l-4" style={{borderLeftColor: notification.type === 'success' ? '#10B981' : notification.type === 'error' ? '#EF4444' : '#3B82F6'}}>
+            {/* Notification Icon */}
+            <div className="flex justify-center pt-8 pb-4">
+              <div 
+                className="w-20 h-20 rounded-full flex items-center justify-center"
+                style={{
+                  background: notification.type === 'success' 
+                    ? 'linear-gradient(135deg, #10B981, #059669)'
+                    : notification.type === 'error'
+                    ? 'linear-gradient(135deg, #EF4444, #DC2626)'
+                    : 'linear-gradient(135deg, #3B82F6, #2563EB)'
+                }}
+              >
+                <i className={`fa-solid ${notification.type === 'success' ? 'fa-check' : notification.type === 'error' ? 'fa-times' : 'fa-info'} text-3xl text-white`}></i>
+              </div>
+            </div>
+            
+            {/* Notification Message */}
+            <div className="px-8 pb-8 text-center">
+              <h3 className="text-2xl font-bold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                {notification.title}
+              </h3>
+              <p className="text-gray-600 text-lg mb-2" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                {notification.message}
+              </p>
+              {notification.description && (
+                <p className="text-sm text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  {notification.description}
+                </p>
+              )}
+            </div>
+            
+            {/* Close Button */}
+            <div className="px-8 pb-8">
+              <button
+                onClick={() => setNotification({...notification, show: false})}
+                className="w-full py-3 px-6 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg"
+                style={{background: 'linear-gradient(135deg, #8B6B21 0%, #D4AF37 100%)', color: 'white', fontFamily: 'Telegraf, sans-serif'}}
+              >
+                <i className="fa-solid fa-check mr-2"></i>
+                Got it
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Photo Section */}
-        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-          <h3 className="text-xl font-bold text-[#2e2b41] mb-4">
-            <i className="fa-solid fa-camera mr-2"></i>
+        <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
+          <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 flex items-center" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+            <i className="fa-solid fa-camera mr-2" style={{color: '#E5B80B'}}></i>
             Profile Photo
           </h3>
           
           <div className="text-center">
             {/* Current Photo */}
             <div className="mb-4">
-              <div className="w-32 h-32 mx-auto rounded-full overflow-hidden border-4 border-[#AB8841] bg-gray-100">
+              <div className="w-24 h-24 sm:w-32 sm:h-32 mx-auto rounded-full overflow-hidden border-4 bg-gray-100" style={{borderColor: '#E5B80B'}}>
                 {previewUrl ? (
                   <img 
                     src={previewUrl} 
@@ -316,7 +524,10 @@ const Settings = () => {
                 </p>
                 <button
                   onClick={handlePhotoUpload}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-semibold"
+                  className="px-4 py-2 rounded-lg transition-colors font-semibold text-sm sm:text-base"
+                  style={{backgroundColor: '#E5B80B', color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#d4a509'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#E5B80B'}
                 >
                   <i className="fa-solid fa-save mr-2"></i>
                   Upload Photo
@@ -332,16 +543,19 @@ const Settings = () => {
 
         {/* Account Information */}
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-[#2e2b41]">
-                <i className="fa-solid fa-user mr-2"></i>
+          <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3 sm:gap-0">
+              <h3 className="text-lg sm:text-xl font-bold flex items-center" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                <i className="fa-solid fa-user mr-2" style={{color: '#E5B80B'}}></i>
                 Account Information
               </h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => fetchUser()}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition-colors text-sm font-semibold"
+                  className="px-3 py-1 rounded-lg transition-colors text-sm font-semibold"
+                  style={{backgroundColor: '#6B7280', color: 'white', fontFamily: 'Telegraf, sans-serif'}}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#4B5563'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#6B7280'}
                   title="Refresh user data"
                 >
                   <i className="fa-solid fa-refresh mr-1"></i>
@@ -349,7 +563,10 @@ const Settings = () => {
                 </button>
                 <button
                   onClick={() => setIsEditing(!isEditing)}
-                  className="bg-[#AB8841] hover:bg-[#8B6B21] text-white px-3 py-1 rounded-lg transition-colors text-sm font-semibold"
+                  className="px-3 py-1 rounded-lg transition-colors text-sm font-semibold"
+                  style={{backgroundColor: '#E5B80B', color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#d4a509'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#E5B80B'}
                 >
                   <i className={`fa-solid ${isEditing ? 'fa-times' : 'fa-edit'} mr-1`}></i>
                   {isEditing ? 'Cancel' : 'Edit'}
@@ -360,21 +577,22 @@ const Settings = () => {
             {isEditing ? (
               <form onSubmit={handleUpdateProfile} className="space-y-4">
                 <div>
-                  <label className="block text-[#2e2b41] font-semibold mb-2">
+                  <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
                     Username
                   </label>
                   <input
                     type="text"
                     value={user?.username || ""}
                     disabled
-                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+                    className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 text-sm sm:text-base"
+                    style={{fontFamily: 'Telegraf, sans-serif'}}
                   />
                   <p className="text-xs text-gray-500 mt-1">Username cannot be changed</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[#2e2b41] font-semibold mb-2">
+                    <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
                       First Name *
                     </label>
                     <input
@@ -382,13 +600,14 @@ const Settings = () => {
                       name="firstname"
                       value={profileForm.firstname}
                       onChange={handleProfileChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                      className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E5B80B] text-sm sm:text-base"
+                      style={{fontFamily: 'Telegraf, sans-serif'}}
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[#2e2b41] font-semibold mb-2">
+                    <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
                       Last Name *
                     </label>
                     <input
@@ -396,14 +615,15 @@ const Settings = () => {
                       name="lastname"
                       value={profileForm.lastname}
                       onChange={handleProfileChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                      className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E5B80B] text-sm sm:text-base"
+                      style={{fontFamily: 'Telegraf, sans-serif'}}
                       required
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[#2e2b41] font-semibold mb-2">
+                  <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
                     Email
                   </label>
                   <input
@@ -411,26 +631,31 @@ const Settings = () => {
                     name="email"
                     value={profileForm.email}
                     onChange={handleProfileChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                    className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E5B80B] text-sm sm:text-base"
+                    style={{fontFamily: 'Telegraf, sans-serif'}}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[#2e2b41] font-semibold mb-2">
+                  <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
                     Role
                   </label>
                   <input
                     type="text"
                     value={user?.role === 'admin' ? 'Administrator' : 'Staff Member'}
                     disabled
-                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+                    className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 text-sm sm:text-base"
+                    style={{fontFamily: 'Telegraf, sans-serif'}}
                   />
                 </div>
 
                 <div className="flex gap-3 pt-4">
                   <button
                     type="submit"
-                    className="bg-[#AB8841] hover:bg-[#8B6B21] text-white px-6 py-2 rounded-lg font-semibold transition-colors"
+                    className="px-4 sm:px-6 py-2 rounded-lg font-semibold transition-colors text-sm sm:text-base"
+                    style={{backgroundColor: '#E5B80B', color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#d4a509'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = '#E5B80B'}
                   >
                     <i className="fa-solid fa-save mr-2"></i>
                     Save Changes
@@ -438,7 +663,10 @@ const Settings = () => {
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
+                    className="px-4 sm:px-6 py-2 rounded-lg font-semibold transition-colors text-sm sm:text-base"
+                    style={{backgroundColor: '#6B7280', color: 'white', fontFamily: 'Telegraf, sans-serif'}}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#4B5563'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = '#6B7280'}
                   >
                     <i className="fa-solid fa-times mr-2"></i>
                     Cancel
@@ -491,57 +719,138 @@ const Settings = () => {
 
 
       {/* Password Change Section */}
-      <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-200">
-        <h3 className="text-2xl font-bold text-[#2e2b41] mb-6">
-          <i className="fa-solid fa-lock mr-3"></i>
+      <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 md:p-8 border border-gray-200">
+        <h3 className="text-lg sm:text-xl md:text-2xl font-bold mb-4 sm:mb-6 flex items-center" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+          <i className="fa-solid fa-lock mr-2 sm:mr-3" style={{color: '#E5B80B'}}></i>
           Change Password
         </h3>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-[#2e2b41] font-semibold mb-2">
+            <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
               Current Password *
             </label>
-            <input
-              type="password"
-              name="oldPassword"
-              value={form.oldPassword}
-              onChange={handleChange}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-              placeholder="Enter current password"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-[#2e2b41] font-semibold mb-2">
-                New Password *
-              </label>
+            <div className="relative">
               <input
-                type="password"
-                name="newPassword"
-                value={form.newPassword}
+                type={showPasswords.oldPassword ? "text" : "password"}
+                name="oldPassword"
+                value={form.oldPassword}
                 onChange={handleChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-                placeholder="Enter new password"
+                className="w-full p-2 sm:p-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E5B80B] text-sm sm:text-base"
+                style={{fontFamily: 'Telegraf, sans-serif'}}
+                placeholder="Enter current password"
                 required
               />
+              <button
+                type="button"
+                onClick={() => togglePasswordVisibility('oldPassword')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+              >
+                <i className={`fa-solid ${showPasswords.oldPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm`}></i>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            <div>
+              <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                New Password *
+              </label>
+              <div className="relative">
+                <input
+                  type={showPasswords.newPassword ? "text" : "password"}
+                  name="newPassword"
+                  value={form.newPassword}
+                  onChange={handleChange}
+                  className="w-full p-2 sm:p-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E5B80B] text-sm sm:text-base"
+                  style={{fontFamily: 'Telegraf, sans-serif'}}
+                  placeholder="Enter new password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => togglePasswordVisibility('newPassword')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                >
+                  <i className={`fa-solid ${showPasswords.newPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm`}></i>
+                </button>
+              </div>
+              
+              {/* Password Requirements Indicator */}
+              {form.newPassword && (
+                <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                    Password Requirements:
+                  </h4>
+                  <div className="space-y-1">
+                    <div className="flex items-center text-xs">
+                      <i className={`fa-solid fa-${getPasswordRequirements(form.newPassword).length ? 'check' : 'times'} mr-2 ${
+                        getPasswordRequirements(form.newPassword).length ? 'text-green-600' : 'text-red-600'
+                      }`}></i>
+                      <span className={getPasswordRequirements(form.newPassword).length ? 'text-green-700' : 'text-red-700'}>
+                        At least 8 characters long
+                      </span>
+                    </div>
+                    <div className="flex items-center text-xs">
+                      <i className={`fa-solid fa-${getPasswordRequirements(form.newPassword).uppercase ? 'check' : 'times'} mr-2 ${
+                        getPasswordRequirements(form.newPassword).uppercase ? 'text-green-600' : 'text-red-600'
+                      }`}></i>
+                      <span className={getPasswordRequirements(form.newPassword).uppercase ? 'text-green-700' : 'text-red-700'}>
+                        At least one uppercase letter (A-Z)
+                      </span>
+                    </div>
+                    <div className="flex items-center text-xs">
+                      <i className={`fa-solid fa-${getPasswordRequirements(form.newPassword).lowercase ? 'check' : 'times'} mr-2 ${
+                        getPasswordRequirements(form.newPassword).lowercase ? 'text-green-600' : 'text-red-600'
+                      }`}></i>
+                      <span className={getPasswordRequirements(form.newPassword).lowercase ? 'text-green-700' : 'text-red-700'}>
+                        At least one lowercase letter (a-z)
+                      </span>
+                    </div>
+                    <div className="flex items-center text-xs">
+                      <i className={`fa-solid fa-${getPasswordRequirements(form.newPassword).number ? 'check' : 'times'} mr-2 ${
+                        getPasswordRequirements(form.newPassword).number ? 'text-green-600' : 'text-red-600'
+                      }`}></i>
+                      <span className={getPasswordRequirements(form.newPassword).number ? 'text-green-700' : 'text-red-700'}>
+                        At least one number (0-9)
+                      </span>
+                    </div>
+                    <div className="flex items-center text-xs">
+                      <i className={`fa-solid fa-${getPasswordRequirements(form.newPassword).special ? 'check' : 'times'} mr-2 ${
+                        getPasswordRequirements(form.newPassword).special ? 'text-green-600' : 'text-red-600'
+                      }`}></i>
+                      <span className={getPasswordRequirements(form.newPassword).special ? 'text-green-700' : 'text-red-700'}>
+                        At least one special character (!@#$%^&*)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
-              <label className="block text-[#2e2b41] font-semibold mb-2">
+              <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
                 Confirm New Password *
               </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={form.confirmPassword}
-                onChange={handleChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-                placeholder="Confirm new password"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPasswords.confirmPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  className="w-full p-2 sm:p-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E5B80B] text-sm sm:text-base"
+                  style={{fontFamily: 'Telegraf, sans-serif'}}
+                  placeholder="Confirm new password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => togglePasswordVisibility('confirmPassword')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                >
+                  <i className={`fa-solid ${showPasswords.confirmPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm`}></i>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -549,7 +858,10 @@ const Settings = () => {
             <button
               type="submit"
               disabled={loading}
-              className="bg-[#AB8841] hover:bg-[#8B6B21] text-white px-8 py-3 rounded-lg font-semibold transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 sm:px-6 md:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+              style={{backgroundColor: '#E5B80B', color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#d4a509'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#E5B80B'}
             >
               {loading ? (
                 <>

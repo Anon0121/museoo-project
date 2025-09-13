@@ -15,6 +15,9 @@ const Visitors = () => {
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [visitorsPerPage] = useState(10);
+  
+  // Dropdown state for mobile view
+  const [expandedVisitors, setExpandedVisitors] = useState(new Set());
 
   const fetchVisitors = async () => {
     try {
@@ -112,11 +115,11 @@ const Visitors = () => {
     const matchesSearch = searchTerm === "" || 
       `${visitor.first_name} ${visitor.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
       visitor.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              visitor.visitorType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              visitor.visitor_type_display?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       visitor.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       visitor.address?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesType = typeFilter === "all" || visitor.visitor_type === typeFilter;
+    const matchesType = typeFilter === "all" || visitor.visitor_type_display === typeFilter;
     
     const matchesDate = dateFilter === "" || 
       (visitor.checkin_time && new Date(visitor.checkin_time).toISOString().split('T')[0] === dateFilter);
@@ -145,10 +148,23 @@ const Visitors = () => {
     setCurrentPage(1);
   }, [searchTerm, typeFilter, dateFilter, sortOrder]);
 
+  // Toggle visitor details dropdown
+  const toggleVisitorDetails = (visitorId) => {
+    setExpandedVisitors(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(visitorId)) {
+        newSet.delete(visitorId);
+      } else {
+        newSet.add(visitorId);
+      }
+      return newSet;
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-lg text-[#2e2b41]">
+        <div className="text-lg" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
           <i className="fa-solid fa-spinner fa-spin mr-2"></i>
           Loading visitor records...
         </div>
@@ -162,16 +178,16 @@ const Visitors = () => {
       <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#2e2b41] mb-2 font-['Lora']">
-              <i className="fa-solid fa-users mr-2 sm:mr-3"></i>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
+              <i className="fa-solid fa-users mr-2 sm:mr-3" style={{color: '#E5B80B'}}></i>
               Visitor Records
             </h1>
-            <p className="text-gray-600 text-sm sm:text-base font-['Telegraph']">Real-time visitor tracking and records</p>
+            <p className="text-gray-600 text-sm sm:text-base" style={{fontFamily: 'Telegraf, sans-serif'}}>Real-time visitor tracking and records</p>
           </div>
           <div className="text-left sm:text-right">
-            <p className="text-xs sm:text-sm text-gray-500 font-['Telegraph']">Total Visitors</p>
-            <p className="text-xl sm:text-2xl font-bold text-[#AB8841] font-['Lora']">{visitors.length}</p>
-            <p className="text-xs text-gray-400 mt-1 font-['Telegraph']">
+            <p className="text-xs sm:text-sm text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Total Visitors</p>
+            <p className="text-xl sm:text-2xl font-bold" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>{visitors.length}</p>
+            <p className="text-xs text-gray-400 mt-1" style={{fontFamily: 'Telegraf, sans-serif'}}>
               Last updated: {lastUpdate.toLocaleTimeString()}
             </p>
           </div>
@@ -183,9 +199,9 @@ const Visitors = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center">
             <div className="w-3 h-3 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-            <span className="text-sm font-semibold text-green-600 font-['Lora']">Live Tracking Active</span>
+            <span className="text-sm font-semibold text-green-600" style={{fontFamily: 'Telegraf, sans-serif'}}>Live Tracking Active</span>
           </div>
-          <div className="text-xs sm:text-sm text-gray-500 font-['Telegraph']">
+          <div className="text-xs sm:text-sm text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>
             Auto-refresh every 10 seconds
           </div>
         </div>
@@ -193,26 +209,28 @@ const Visitors = () => {
 
       {/* Filters Section */}
       <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           {/* Search */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1 font-['Lora']">Search</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" style={{fontFamily: 'Telegraf, sans-serif'}}>Search</label>
             <input
               type="text"
               placeholder="Search by name, email, visitor type, purpose, or address..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent font-['Telegraph']"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent"
+              style={{fontFamily: 'Telegraf, sans-serif', focusRingColor: '#E5B80B'}}
             />
           </div>
 
           {/* Type Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1 font-['Lora']">Type</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" style={{fontFamily: 'Telegraf, sans-serif'}}>Type</label>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent font-['Telegraph']"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent"
+              style={{fontFamily: 'Telegraf, sans-serif', focusRingColor: '#E5B80B'}}
             >
               <option value="all">All Types</option>
               <option value="Primary Visitor">Primary Visitor</option>
@@ -223,22 +241,24 @@ const Visitors = () => {
 
           {/* Date Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1 font-['Lora']">Visit Date</label>
-                          <input
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent font-['Telegraph']"
-              />
+            <label className="block text-sm font-medium text-gray-700 mb-1" style={{fontFamily: 'Telegraf, sans-serif'}}>Visit Date</label>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent"
+              style={{fontFamily: 'Telegraf, sans-serif', focusRingColor: '#E5B80B'}}
+            />
           </div>
 
           {/* Sort Order */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1 font-['Lora']">Sort By</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" style={{fontFamily: 'Telegraf, sans-serif'}}>Sort By</label>
             <select
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent font-['Telegraph']"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent"
+              style={{fontFamily: 'Telegraf, sans-serif', focusRingColor: '#E5B80B'}}
             >
               <option value="newest">Newest Scanned First</option>
               <option value="oldest">Oldest Scanned First</option>
@@ -247,7 +267,7 @@ const Visitors = () => {
 
           {/* Results Count */}
           <div className="flex items-end">
-            <div className="bg-[#AB8841] text-white px-4 py-2 rounded-lg font-medium font-['Telegraph']">
+            <div className="text-white px-4 py-2 rounded-lg font-medium" style={{backgroundColor: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
               {filteredVisitors.length} visitors
             </div>
           </div>
@@ -257,8 +277,8 @@ const Visitors = () => {
       {/* Mobile Card View */}
       <div className="block lg:hidden">
         <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
-          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gradient-to-r from-[#AB8841] to-[#8B6B21]">
-            <h3 className="text-lg sm:text-xl font-bold text-white font-['Lora']">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200" style={{background: 'linear-gradient(to right, #351E10, #2A1A0D)'}}>
+            <h3 className="text-lg sm:text-xl font-bold text-white" style={{fontFamily: 'Telegraf, sans-serif'}}>
               <i className="fa-solid fa-list mr-2"></i>
               All Visitors ({visitors.length})
             </h3>
@@ -268,85 +288,105 @@ const Visitors = () => {
               <div className="text-center py-8 sm:py-12">
                 <div className="text-gray-500">
                   <i className="fa-solid fa-users text-3xl sm:text-4xl mb-4 text-gray-300"></i>
-                  <p className="text-base sm:text-lg font-['Lora']">No visitor records found</p>
-                  <p className="text-sm font-['Telegraph']">Try adjusting your search or filters</p>
+                  <p className="text-base sm:text-lg" style={{fontFamily: 'Telegraf, sans-serif'}}>No visitor records found</p>
+                  <p className="text-sm" style={{fontFamily: 'Telegraf, sans-serif'}}>Try adjusting your search or filters</p>
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {currentVisitors.map((visitor, index) => (
-                  <div key={visitor.visitor_id || index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm sm:text-base font-semibold text-[#2e2b41] truncate font-['Lora']">
-                          {visitor.first_name} {visitor.last_name}
-                        </h4>
-                        <p className="text-xs sm:text-sm text-gray-600 font-['Telegraph']">{visitor.email}</p>
+                  <div key={visitor.visitor_id || index} className="bg-gray-50 rounded-lg border border-gray-200">
+                    {/* Main Card Header */}
+                    <div className="p-3">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-semibold truncate" style={{color: '#E5B80B', fontFamily: 'Telegraf, sans-serif'}}>
+                            {visitor.first_name} {visitor.last_name}
+                          </h4>
+                          <p className="text-xs text-gray-600" style={{fontFamily: 'Telegraf, sans-serif'}}>{visitor.email}</p>
+                        </div>
+                        <div className="ml-2 flex items-center gap-2">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                            Visited
+                          </span>
+                          <button
+                            onClick={() => toggleVisitorDetails(visitor.visitor_id || index)}
+                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                              expandedVisitors.has(visitor.visitor_id || index)
+                                ? 'text-white'
+                                : 'text-gray-600 hover:bg-gray-200'
+                            }`}
+                            style={{
+                              fontFamily: 'Telegraf, sans-serif',
+                              backgroundColor: expandedVisitors.has(visitor.visitor_id || index) ? '#351E10' : 'transparent'
+                            }}
+                          >
+                            <i className={`fa-solid ${expandedVisitors.has(visitor.visitor_id || index) ? 'fa-chevron-up' : 'fa-chevron-down'} mr-1`}></i>
+                            {expandedVisitors.has(visitor.visitor_id || index) ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
                       </div>
-                      <div className="ml-3 text-right">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 font-['Telegraph']">
-                          Visited
-                        </span>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-xs sm:text-sm">
-                      <div>
-                        <span className="text-gray-500 font-['Telegraph']">Gender:</span>
-                        <span className="ml-1 text-[#2e2b41] capitalize font-['Telegraph']">{visitor.gender}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 font-['Telegraph']">Visitor Type:</span>
-                        <span className="ml-1 text-[#2e2b41] capitalize font-['Telegraph']">{visitor.visitor_type}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 font-['Telegraph']">Purpose:</span>
-                        <span className="ml-1 text-[#2e2b41] capitalize font-['Telegraph']">{visitor.purpose}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 font-['Telegraph']">Type:</span>
-                        <span className={`ml-1 px-2 py-1 rounded-full text-xs font-medium font-['Telegraph'] ${
-                          visitor.visitor_type === 'Primary Visitor' 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : visitor.visitor_type === 'Walk-in Visitor'
-                            ? 'bg-orange-100 text-orange-800'
-                            : 'bg-purple-100 text-purple-800'
-                        }`}>
-                          {visitor.visitor_type || 'Unknown'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 font-['Telegraph']">Booking:</span>
-                        <span className={`ml-1 px-2 py-1 rounded-full text-xs font-medium font-['Telegraph'] ${
-                          visitor.booking_type === 'individual' 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : visitor.booking_type === 'group'
-                            ? 'bg-purple-100 text-purple-800'
-                            : visitor.booking_type === 'ind-walkin'
-                            ? 'bg-orange-100 text-orange-800'
-                            : visitor.booking_type === 'group-walkin'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {visitor.booking_type || 'Unknown'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 font-['Telegraph']">Visit Date & Time:</span>
-                        <span className="ml-1 text-[#2e2b41] font-['Telegraph']">
-                          {formatDateTime(visitor.checkin_time)}
-                        </span>
+                      
+                      {/* Basic Info - Always Visible */}
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Visit Time:</span>
+                          <span className="text-right" style={{color: '#E5B80B', fontFamily: 'Telegraf, sans-serif'}}>
+                            {formatDateTime(visitor.checkin_time)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <div className="text-xs sm:text-sm">
-                        <span className="text-gray-500 font-['Telegraph']">Address:</span>
-                        <span className="ml-1 text-[#2e2b41] truncate block font-['Telegraph']">{visitor.address}</span>
+
+                    {/* Expandable Details */}
+                    {expandedVisitors.has(visitor.visitor_id || index) && (
+                      <div className="px-3 pb-3 border-t border-gray-200 pt-3">
+                        <div className="space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Gender:</span>
+                            <span className="capitalize" style={{color: '#E5B80B', fontFamily: 'Telegraf, sans-serif'}}>{visitor.gender}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Purpose:</span>
+                            <span className="capitalize" style={{color: '#E5B80B', fontFamily: 'Telegraf, sans-serif'}}>{visitor.purpose}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Type:</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              visitor.visitor_type_display === 'Primary Visitor' 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : visitor.visitor_type_display === 'Additional Visitor'
+                                ? 'bg-purple-100 text-purple-800'
+                                : visitor.visitor_type_display === 'Walk-in Visitor'
+                                ? 'bg-orange-100 text-orange-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`} style={{fontFamily: 'Telegraf, sans-serif'}}>
+                              {visitor.visitor_type_display || 'Unknown'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Booking:</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              visitor.booking_type === 'individual' 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : visitor.booking_type === 'group'
+                                ? 'bg-purple-100 text-purple-800'
+                                : visitor.booking_type === 'ind-walkin'
+                                ? 'bg-orange-100 text-orange-800'
+                                : visitor.booking_type === 'group-walkin'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`} style={{fontFamily: 'Telegraf, sans-serif'}}>
+                              {visitor.booking_type || 'Unknown'}
+                            </span>
+                          </div>
+                          <div className="pt-2 border-t border-gray-200">
+                            <span className="text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Address:</span>
+                            <span className="ml-1 block truncate" style={{color: '#E5B80B', fontFamily: 'Telegraf, sans-serif'}}>{visitor.address}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-2 text-xs sm:text-sm">
-                        <span className="text-gray-500 font-['Telegraph']">Visit Time:</span>
-                        <span className="ml-1 text-green-600 font-medium font-['Telegraph']">{formatDateTime(visitor.checkin_time)}</span>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -354,36 +394,26 @@ const Visitors = () => {
             
             {/* Mobile Pagination */}
             {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-center gap-2">
+              <div className="mt-4 flex items-center justify-between">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed font-['Telegraph']"
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{fontFamily: 'Telegraf, sans-serif'}}
                 >
                   <i className="fa-solid fa-chevron-left mr-1"></i>
-                  Previous
+                  Prev
                 </button>
                 
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-2 text-sm rounded-lg font-['Telegraph'] ${
-                        currentPage === page
-                          ? 'bg-[#AB8841] text-white'
-                          : 'border border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
+                <span className="text-xs text-gray-600" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  Page {currentPage} of {totalPages}
+                </span>
                 
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed font-['Telegraph']"
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{fontFamily: 'Telegraf, sans-serif'}}
                 >
                   Next
                   <i className="fa-solid fa-chevron-right ml-1"></i>
@@ -397,8 +427,8 @@ const Visitors = () => {
       {/* Desktop Table View */}
       <div className="hidden lg:block">
         <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-[#AB8841] to-[#8B6B21]">
-            <h3 className="text-xl font-bold text-white font-['Lora']">
+          <div className="px-6 py-4 border-b border-gray-200" style={{background: 'linear-gradient(to right, #351E10, #2A1A0D)'}}>
+            <h3 className="text-xl font-bold text-white" style={{fontFamily: 'Telegraf, sans-serif'}}>
               <i className="fa-solid fa-list mr-2"></i>
               All Visitors ({filteredVisitors.length})
             </h3>
@@ -407,125 +437,142 @@ const Visitors = () => {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
                     Visitor Name
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
-                    Gender
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
-                    Visitor Type
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
-                    Address
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
                     Email
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
-                    Purpose
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
-                    Type
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
                     Booking Type
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
                     Visit Date & Time
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-[#2e2b41] uppercase tracking-wider font-['Lora']">
-                    Status
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
+                    Details
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {currentVisitors.length === 0 ? (
                   <tr>
-                    <td colSpan="10" className="px-6 py-12 text-center">
+                    <td colSpan="5" className="px-6 py-12 text-center">
                       <div className="text-gray-500">
                         <i className="fa-solid fa-users text-4xl mb-4 text-gray-300"></i>
-                        <p className="text-lg font-['Lora']">No visitor records found</p>
-                        <p className="text-sm font-['Telegraph']">Try adjusting your search or filters</p>
+                        <p className="text-lg" style={{fontFamily: 'Telegraf, sans-serif'}}>No visitor records found</p>
+                        <p className="text-sm" style={{fontFamily: 'Telegraf, sans-serif'}}>Try adjusting your search or filters</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   currentVisitors.map((visitor, index) => (
-                    <tr key={visitor.visitor_id || index} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-semibold text-[#2e2b41] font-['Lora']">
-                          {visitor.first_name} {visitor.last_name}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-[#2e2b41] capitalize font-['Telegraph']">
-                          {visitor.gender}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-[#2e2b41] capitalize font-['Telegraph']">
-                          {visitor.visitor_type}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-[#2e2b41] max-w-xs truncate font-['Telegraph']">
-                          {visitor.address}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-[#2e2b41] font-['Telegraph']">
-                          {visitor.email}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-[#2e2b41] capitalize font-['Telegraph']">
-                          {visitor.purpose}
-                        </div>
-                      </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium font-['Telegraph'] ${
-                            visitor.visitor_type === 'Primary Visitor' 
-                              ? 'bg-blue-100 text-blue-800' 
-                              : visitor.visitor_type === 'Walk-in Visitor'
-                              ? 'bg-orange-100 text-orange-800'
-                              : 'bg-purple-100 text-purple-800'
-                          }`}>
-                            {visitor.visitor_type || 'Unknown'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium font-['Telegraph'] ${
-                            visitor.booking_type === 'individual' 
-                              ? 'bg-blue-100 text-blue-800' 
-                              : visitor.booking_type === 'group'
-                              ? 'bg-purple-100 text-purple-800'
-                              : visitor.booking_type === 'ind-walkin'
-                              ? 'bg-orange-100 text-orange-800'
-                              : visitor.booking_type === 'group-walkin'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {visitor.booking_type || 'Unknown'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-[#2e2b41] font-['Telegraph']">
-                        {formatDateTime(visitor.checkin_time)}
-                      </div>
-                    </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 font-['Telegraph']">
-                            Visited
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
+                    <React.Fragment key={visitor.visitor_id || index}>
+                      <tr className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-semibold" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
+                            {visitor.first_name} {visitor.last_name}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
+                            {visitor.email}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              visitor.booking_type === 'individual' 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : visitor.booking_type === 'group'
+                                ? 'bg-purple-100 text-purple-800'
+                                : visitor.booking_type === 'ind-walkin'
+                                ? 'bg-orange-100 text-orange-800'
+                                : visitor.booking_type === 'group-walkin'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`} style={{fontFamily: 'Telegraf, sans-serif'}}>
+                              {visitor.booking_type || 'Unknown'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
+                            {formatDateTime(visitor.checkin_time)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => {
+                              const detailsRow = document.getElementById(`details-${visitor.visitor_id || index}`);
+                              if (detailsRow) {
+                                detailsRow.style.display = detailsRow.style.display === 'none' ? 'table-row' : 'none';
+                              }
+                            }}
+                            className="text-sm px-3 py-1 rounded-lg border transition-all duration-200 hover:shadow-md"
+                            style={{color: '#351E10', borderColor: '#351E10', fontFamily: 'Telegraf, sans-serif'}}
+                          >
+                            <i className="fa-solid fa-chevron-down mr-1"></i>
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                      {/* Expanded Details Row */}
+                      <tr id={`details-${visitor.visitor_id || index}`} style={{display: 'none'}} className="bg-gray-50">
+                        <td colSpan="5" className="px-6 py-4">
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            <div>
+                              <span className="text-xs font-medium text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Gender:</span>
+                              <div className="text-sm capitalize" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
+                                {visitor.gender}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-xs font-medium text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Visitor Type:</span>
+                              <div className="text-sm capitalize" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
+                                {visitor.visitor_type}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-xs font-medium text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Purpose:</span>
+                              <div className="text-sm capitalize" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
+                                {visitor.purpose}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-xs font-medium text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Type:</span>
+                              <div className="text-sm">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  visitor.visitor_type_display === 'Primary Visitor' 
+                                    ? 'bg-blue-100 text-blue-800' 
+                                    : visitor.visitor_type_display === 'Additional Visitor'
+                                    ? 'bg-purple-100 text-purple-800'
+                                    : visitor.visitor_type_display === 'Walk-in Visitor'
+                                    ? 'bg-orange-100 text-orange-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`} style={{fontFamily: 'Telegraf, sans-serif'}}>
+                                  {visitor.visitor_type_display || 'Unknown'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="md:col-span-2 lg:col-span-3">
+                              <span className="text-xs font-medium text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Address:</span>
+                              <div className="text-sm" style={{color: '#000000', fontFamily: 'Telegraf, sans-serif'}}>
+                                {visitor.address}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-xs font-medium text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>Status:</span>
+                              <div className="text-sm">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                                  Visited
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   ))
                 )}
               </tbody>
@@ -536,11 +583,11 @@ const Visitors = () => {
           {filteredVisitors.length > 0 && (
             <div className="px-6 py-4 bg-gray-50 border-t">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="text-sm text-gray-700 font-['Telegraph']">
-                  Showing <span className="font-medium">{indexOfFirstVisitor + 1}</span> to <span className="font-medium">{Math.min(indexOfLastVisitor, filteredVisitors.length)}</span> of <span className="font-medium">{filteredVisitors.length}</span> visitors
+                <div className="text-sm text-gray-700" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  Showing <span className="font-medium" style={{color: '#E5B80B'}}>{indexOfFirstVisitor + 1}</span> to <span className="font-medium" style={{color: '#E5B80B'}}>{Math.min(indexOfLastVisitor, filteredVisitors.length)}</span> of <span className="font-medium" style={{color: '#351E10'}}>{filteredVisitors.length}</span> visitors
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="text-sm text-gray-500 font-['Telegraph']">
+                  <div className="text-sm text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>
                     Last updated: {new Date().toLocaleTimeString()}
                   </div>
                 </div>
@@ -552,7 +599,8 @@ const Visitors = () => {
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed font-['Telegraph']"
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{fontFamily: 'Telegraf, sans-serif'}}
                   >
                     <i className="fa-solid fa-chevron-left mr-1"></i>
                     Previous
@@ -563,11 +611,15 @@ const Visitors = () => {
                       <button
                         key={page}
                         onClick={() => setCurrentPage(page)}
-                        className={`px-3 py-1 text-sm rounded-lg font-['Telegraph'] ${
+                        className={`px-3 py-1 text-sm rounded-lg ${
                           currentPage === page
-                            ? 'bg-[#AB8841] text-white'
+                            ? 'text-white'
                             : 'border border-gray-300 hover:bg-gray-50'
                         }`}
+                        style={{
+                          fontFamily: 'Telegraf, sans-serif',
+                          backgroundColor: currentPage === page ? '#E5B80B' : 'transparent'
+                        }}
                       >
                         {page}
                       </button>
@@ -577,7 +629,8 @@ const Visitors = () => {
                   <button
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed font-['Telegraph']"
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{fontFamily: 'Telegraf, sans-serif'}}
                   >
                     Next
                     <i className="fa-solid fa-chevron-right ml-1"></i>

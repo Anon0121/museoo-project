@@ -9,12 +9,13 @@ const PORT = process.env.PORT || 3000;
 
 // Serve uploaded images
 app.use('/uploads', express.static('uploads'));
+
 app.use('/uploads/profiles', express.static('uploads/profiles'));
 
 // ✅ Middleware
 app.use(bodyParser.json());
 // Ensure activity log table exists
-const { ensureActivityLogTable, logActivity } = require('./utils/activityLogger');
+const { ensureActivityLogTable, logActivity, logUserActivity } = require('./utils/activityLogger');
 ensureActivityLogTable().catch(err => console.error('Activity log table ensure failed:', err));
 
 
@@ -52,6 +53,16 @@ const isAuthenticated = (req, res, next) => {
   return res.status(401).json({ success: false, message: 'Not authenticated' });
 };
 
+// ✅ Global activity logging middleware for all authenticated routes
+app.use((req, res, next) => {
+  // Only log for authenticated users and non-GET requests (modifications)
+  if (req.session?.user && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    logUserActivity(req, res, next);
+  } else {
+    next();
+  }
+});
+
 // Import user utilities
 const { generateSecurePassword, hashPassword, verifyPassword, sendUserCredentials } = require('./utils/userUtils');
 
@@ -78,7 +89,7 @@ app.post('/api/signup', async (req, res) => {
 });
 
 // ✅ Create user with auto-generated password and email notification
-app.post('/api/create-user', async (req, res) => {
+app.post('/api/create-user', isAuthenticated, async (req, res) => {
   const { username, firstname, lastname, email, role, permissions } = req.body;
 
   if (!username || !firstname || !lastname || !email || role === undefined) {
@@ -120,14 +131,20 @@ app.post('/api/create-user', async (req, res) => {
     }
     
     // Send credentials email with plain text password (for user to see)
-    const emailResult = await sendUserCredentials({
-      username,
-      firstname,
-      lastname,
-      email,
-      password, // Send plain text password in email
-      role
-    });
+    let emailResult = { success: false, message: 'Email sending disabled' };
+    try {
+      emailResult = await sendUserCredentials({
+        username,
+        firstname,
+        lastname,
+        email,
+        password, // Send plain text password in email
+        role
+      });
+    } catch (emailError) {
+      console.error('❌ Email sending failed:', emailError.message);
+      emailResult = { success: false, message: 'Email sending failed: ' + emailError.message };
+    }
     
     // Log activity
     logActivity(req, 'user.create', { username, role, emailSent: !!emailResult.success });
@@ -182,7 +199,7 @@ app.post('/api/login', async (req, res) => {
       return res.json({ success: false, message: 'Invalid username or password' });
     }
 
-    if (user.status === 'deactivated') {
+    if (user.status === 'deactivated' || !user.status || user.status.trim() === '') {
       return res.json({ success: false, message: 'Account is deactivated.' });
     }
 
@@ -216,6 +233,22 @@ app.get('/api/user', isAuthenticated, async (req, res) => {
     `, [req.session.user.id]);
     
     if (results.length > 0) {
+      const user = results[0];
+      
+      // Check if user is deactivated
+      if (user.status === 'deactivated' || !user.status || user.status.trim() === '') {
+        // Destroy the session for deactivated users
+        req.session.destroy((err) => {
+          if (err) {
+            console.error('❌ Session destruction error:', err);
+          }
+        });
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Account is deactivated. Please contact an administrator.' 
+        });
+      }
+      
       // Fetch permissions from user_permissions table
       const [permissionResults] = await pool.query(`
         SELECT permission_name, is_allowed, access_level
@@ -233,14 +266,14 @@ app.get('/api/user', isAuthenticated, async (req, res) => {
       });
       
       const freshUserData = {
-        id: results[0].user_ID,
-        username: results[0].username,
-        firstname: results[0].firstname,
-        lastname: results[0].lastname,
-        email: results[0].email,
-        role: results[0].role,
-        status: results[0].status,
-        profile_photo: results[0].profile_photo || null,
+        id: user.user_ID,
+        username: user.username,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        profile_photo: user.profile_photo || null,
         permissions: permissions
       };
       
@@ -419,7 +452,7 @@ app.post('/api/upload-profile-photo', isAuthenticated, profilePhotoUpload.single
 });
 
 // ✅ Deactivate user
-app.post('/api/users/:id/deactivate', async (req, res) => {
+app.post('/api/users/:id/deactivate', isAuthenticated, async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query(`UPDATE system_user SET status = 'deactivated' WHERE user_ID = ?`, [id]);
@@ -433,7 +466,7 @@ app.post('/api/users/:id/deactivate', async (req, res) => {
 });
 
 // ✅ Activate user
-app.post('/api/users/:id/activate', async (req, res) => {
+app.post('/api/users/:id/activate', isAuthenticated, async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query(`UPDATE system_user SET status = 'active' WHERE user_ID = ?`, [id]);
@@ -447,7 +480,7 @@ app.post('/api/users/:id/activate', async (req, res) => {
 });
 
 // ✅ Delete user
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', isAuthenticated, async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query(`DELETE FROM system_user WHERE user_ID = ?`, [id]);
@@ -529,8 +562,11 @@ app.use('/api/cultural-objects', require('./routes/cultural-objects'));
 app.use('/api/visitors', require('./routes/visitors'));
 app.use('/api/additional-visitors', require('./routes/additional-visitors'));
 app.use('/api/walkin-visitors', require('./routes/walkin-visitors'));
+app.use('/api/individual-walkin', require('./routes/individual-walkin'));
+app.use('/api/group-walkin-leader', require('./routes/group-walkin-leader'));
 app.use('/api/group-walkin-leaders', require('./routes/group-walkin-leaders'));
 app.use('/api/group-walkin-members', require('./routes/group-walkin-members'));
+app.use('/api/group-walkin-visitors', require('./routes/group-walkin-visitors'));
 app.use('/api/backup-codes', require('./routes/backup-codes'));
 
 
@@ -546,6 +582,37 @@ app.use('/api/event-registrations', require('./routes/event-registrations'));
 
 const statsRouter = require('./routes/stats');
 app.use('/api/stats', statsRouter);
+
+// Test endpoint for serving images without extensions
+app.get('/test-image/:filename', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'uploads', filename);
+  
+  if (fs.existsSync(filePath)) {
+    // Read first few bytes to determine file type
+    const buffer = fs.readFileSync(filePath, { start: 0, end: 10 });
+    
+    // Check for JPEG signature (FF D8 FF)
+    if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.sendFile(filePath);
+    }
+    // Check for PNG signature (89 50 4E 47)
+    else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+      res.setHeader('Content-Type', 'image/png');
+      return res.sendFile(filePath);
+    }
+    // Check for GIF signature (47 49 46)
+    else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+      res.setHeader('Content-Type', 'image/gif');
+      return res.sendFile(filePath);
+    }
+  }
+  
+  res.status(404).send('Image not found');
+});
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');

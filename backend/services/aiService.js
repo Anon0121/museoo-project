@@ -242,7 +242,7 @@ Focus on practical insights that would be valuable for museum management and ope
         }
         
         if (data.demographics?.length > 0) {
-          insights.trends.push(`Top nationality: ${data.demographics[0].nationality} with ${data.demographics[0].count} visitors`);
+          insights.trends.push(`Top visitor type: ${data.demographics[0].visitor_type} with ${data.demographics[0].count} visitors`);
         }
 
         if (data.chartData?.timeSlots?.length > 0) {

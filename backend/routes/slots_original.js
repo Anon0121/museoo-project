@@ -80,8 +80,8 @@ router.post('/book', async (req, res) => {
 
     // Insert main visitor
     const [mainVisitorResult] = await conn.query(
-      `INSERT INTO visitors (booking_id, first_name, last_name, gender, address, email, nationality, purpose, status, is_main_visitor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true)`,
-      [bookingId, mainVisitor.firstName, mainVisitor.lastName, mainVisitor.gender, mainVisitor.address, mainVisitor.email, mainVisitor.nationality, mainVisitor.purpose || 'other', 'pending']
+      `INSERT INTO visitors (booking_id, first_name, last_name, gender, address, email, visitor_type, purpose, status, is_main_visitor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true)`,
+      [bookingId, mainVisitor.firstName, mainVisitor.lastName, mainVisitor.gender, mainVisitor.address, mainVisitor.email, mainVisitor.visitorType, mainVisitor.purpose || 'other', 'pending']
     );
     const mainVisitorId = mainVisitorResult.insertId;
 
@@ -90,8 +90,8 @@ router.post('/book', async (req, res) => {
     if (type === 'group' && Array.isArray(groupMembers)) {
       for (const member of groupMembers) {
         const [memberResult] = await conn.query(
-          `INSERT INTO visitors (booking_id, first_name, last_name, gender, address, email, nationality, purpose, status, is_main_visitor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, false)`,
-          [bookingId, member.firstName, member.lastName, member.gender, member.address, member.email, member.nationality, member.purpose || mainVisitor.purpose || 'other', 'pending']
+          `INSERT INTO visitors (booking_id, first_name, last_name, gender, address, email, visitor_type, purpose, status, is_main_visitor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, false)`,
+          [bookingId, member.firstName, member.lastName, member.gender, member.address, member.email, member.visitorType, member.purpose || mainVisitor.purpose || 'other', 'pending']
         );
         groupIds.push(memberResult.insertId);
       }
@@ -302,7 +302,7 @@ router.get('/visit/checkin/:id', async (req, res) => {
         name: `${visitor.first_name} ${visitor.last_name}`,
         email: visitor.email,
         gender: visitor.gender,
-        nationality: visitor.nationality,
+        visitor_type: visitor.visitor_type,
         purpose: visitor.purpose
       } : null
     });

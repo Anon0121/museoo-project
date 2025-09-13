@@ -154,7 +154,7 @@ function generateReportPDF(report) {
                     <th>Visitor ID</th>
                     <th>Name</th>
                     <th>Gender</th>
-                    <th>Nationality</th>
+                    <th>Visitor Type</th>
                     <th>Email</th>
                     <th>Purpose</th>
                     <th>Entry Date</th>
@@ -169,7 +169,7 @@ function generateReportPDF(report) {
                         <td>${visitor.visitor_id}</td>
                         <td><strong>${visitor.first_name} ${visitor.last_name}</strong></td>
                         <td>${visitor.gender}</td>
-                        <td>${visitor.nationality}</td>
+                        <td>${visitor.visitor_type}</td>
                         <td>${visitor.email}</td>
                         <td>${visitor.purpose}</td>
                         <td>${formatDate(visitor.visit_date)}</td>
@@ -230,8 +230,8 @@ function generateExcelContent(report) {
   if (reportData.visitorDetails && reportData.visitorDetails.length > 0) {
     csvRows.push(['Complete Visitor Information']);
     csvRows.push([
-      'Visitor ID', 'First Name', 'Last Name', 'Gender', 'Nationality', 
-      'Email', 'Purpose', 'Entry Date', 'QR Scan Time', 'Time Slot', 'Status'
+              'Visitor ID', 'First Name', 'Last Name', 'Gender', 'Visitor Type',
+        'Email', 'Purpose', 'Entry Date', 'QR Scan Time', 'Time Slot', 'Status'
     ]);
     reportData.visitorDetails.forEach(visitor => {
       csvRows.push([
@@ -239,7 +239,7 @@ function generateExcelContent(report) {
         visitor.first_name,
         visitor.last_name,
         visitor.gender,
-        visitor.nationality,
+        visitor.visitor_type,
         visitor.email,
         visitor.purpose,
         formatDate(visitor.visit_date),

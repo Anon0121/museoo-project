@@ -4,14 +4,30 @@ const pool = require('../db');
 const { logActivity } = require('../utils/activityLogger');
 const router = express.Router();
 
+// Session-based authentication middleware
+const isAuthenticated = (req, res, next) => {
+  if (req.session && req.session.user) {
+    req.user = req.session.user;
+    return next();
+  }
+  return res.status(401).json({ 
+    success: false, 
+    message: 'Not authenticated' 
+  });
+};
+
 const upload = multer({ dest: 'uploads/' });
 
 // CREATE a new cultural object
-router.post('/', upload.array('images'), async (req, res) => {
+router.post('/', isAuthenticated, upload.array('images'), async (req, res) => {
   const {
-    name, description, category, period, origin, material, dimensions,
+    name, description, category, period, origin, material,
     condition_status, acquisition_date, acquisition_method, current_location,
-    estimated_value, conservation_notes, exhibition_history
+    estimated_value, conservation_notes, exhibition_history,
+    // Maintenance fields
+    last_maintenance_date, next_maintenance_date, maintenance_frequency_months,
+    maintenance_notes, maintenance_priority, maintenance_cost,
+    maintenance_reminder_enabled
   } = req.body;
   const files = req.files;
 
@@ -29,14 +45,18 @@ router.post('/', upload.array('images'), async (req, res) => {
     // Insert into object_details
     await conn.query(
       `INSERT INTO object_details (
-        cultural_object_id, period, origin, material, dimensions, condition_status,
+        cultural_object_id, period, origin, material, condition_status,
         acquisition_date, acquisition_method, current_location, estimated_value,
-        conservation_notes, exhibition_history
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        conservation_notes, exhibition_history, last_maintenance_date, next_maintenance_date,
+        maintenance_frequency_months, maintenance_notes, maintenance_priority,
+        maintenance_cost, maintenance_reminder_enabled
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        objectId, period, origin, material, dimensions, condition_status,
+        objectId, period, origin, material, condition_status,
         acquisition_date, acquisition_method, current_location, estimated_value,
-        conservation_notes, exhibition_history
+        conservation_notes, exhibition_history, last_maintenance_date, next_maintenance_date,
+        maintenance_frequency_months || 12, maintenance_notes, maintenance_priority || 'medium',
+        maintenance_cost, maintenance_reminder_enabled !== 'false'
       ]
     );
 
@@ -66,7 +86,13 @@ router.post('/', upload.array('images'), async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const [objects] = await pool.query(
-      `SELECT co.*, od.*, od.id as details_id
+      `SELECT co.id, co.name, co.category, co.description, co.created_at, 
+              od.id as details_id, od.cultural_object_id, od.period, od.origin, od.material, 
+              od.condition_status, od.acquisition_date, od.acquisition_method, od.current_location, 
+              od.estimated_value, od.conservation_notes, od.exhibition_history, od.updated_at,
+              od.last_maintenance_date, od.next_maintenance_date, od.maintenance_frequency_months, 
+              od.maintenance_notes, od.maintenance_priority, od.maintenance_reminder_enabled, 
+              od.maintenance_cost, od.dimensions
        FROM cultural_objects co
        LEFT JOIN object_details od ON co.id = od.cultural_object_id
        ORDER BY co.created_at DESC`
@@ -76,7 +102,8 @@ router.get('/', async (req, res) => {
     );
     const objectsWithImages = objects.map(obj => ({
       ...obj,
-      images: images.filter(img => img.cultural_object_id === obj.id).map(img => img.url)
+      // Use the cultural_object_id from the object_details table to match with images
+      images: images.filter(img => img.cultural_object_id == obj.cultural_object_id).map(img => img.url)
     }));
     res.json(objectsWithImages);
   } catch (err) {
@@ -115,18 +142,29 @@ router.get('/:id', async (req, res) => {
 });
 
 // UPDATE
-router.put('/:id', upload.array('images'), async (req, res) => {
+router.put('/:id', isAuthenticated, upload.array('images'), async (req, res) => {
   const { id } = req.params;
   const {
-    name, description, category, period, origin, material, dimensions,
+    name, description, category, period, origin, material,
     condition_status, acquisition_date, acquisition_method, current_location,
-    estimated_value, conservation_notes, exhibition_history
+    estimated_value, conservation_notes, exhibition_history,
+    // Maintenance fields
+    last_maintenance_date, next_maintenance_date, maintenance_frequency_months,
+    maintenance_notes, maintenance_priority, maintenance_cost,
+    maintenance_reminder_enabled, existing_images
   } = req.body;
   const files = req.files;
 
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+
+    // Check if cultural object exists first
+    const [checkResult] = await conn.query('SELECT id FROM cultural_objects WHERE id = ?', [id]);
+    if (checkResult.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Cultural object not found' });
+    }
 
     // Update cultural_objects
     await conn.query(
@@ -137,17 +175,39 @@ router.put('/:id', upload.array('images'), async (req, res) => {
     // Update object_details
     await conn.query(
       `UPDATE object_details SET
-        period = ?, origin = ?, material = ?, dimensions = ?, condition_status = ?,
+        period = ?, origin = ?, material = ?, condition_status = ?,
         acquisition_date = ?, acquisition_method = ?, current_location = ?, estimated_value = ?,
-        conservation_notes = ?, exhibition_history = ?
+        conservation_notes = ?, exhibition_history = ?, last_maintenance_date = ?,
+        next_maintenance_date = ?, maintenance_frequency_months = ?, maintenance_notes = ?,
+        maintenance_priority = ?, maintenance_cost = ?,
+        maintenance_reminder_enabled = ?
        WHERE cultural_object_id = ?`,
       [
-        period, origin, material, dimensions, condition_status,
+        period, origin, material, condition_status,
         acquisition_date, acquisition_method, current_location, estimated_value,
-        conservation_notes, exhibition_history, id
+        conservation_notes, exhibition_history, last_maintenance_date, next_maintenance_date,
+        maintenance_frequency_months, maintenance_notes, maintenance_priority,
+        maintenance_cost, maintenance_reminder_enabled !== 'false', id
       ]
     );
 
+    // Handle images: remove old ones and add new ones
+    if (existing_images) {
+      // Parse existing images to keep
+      const imagesToKeep = JSON.parse(existing_images);
+      
+      // Delete all current images
+      await conn.query('DELETE FROM images WHERE cultural_object_id = ?', [id]);
+      
+      // Re-add the images we want to keep
+      for (const imageUrl of imagesToKeep) {
+        await conn.query(
+          'INSERT INTO images (cultural_object_id, url) VALUES (?, ?)',
+          [id, imageUrl]
+        );
+      }
+    }
+    
     // Add new images if any
     if (files && files.length > 0) {
       for (const file of files) {
@@ -171,23 +231,38 @@ router.put('/:id', upload.array('images'), async (req, res) => {
 });
 
 // DELETE object and its images/details
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', isAuthenticated, async (req, res) => {
   const { id } = req.params;
-  const conn = await pool.getConnection();
+  console.log(`🗑️ Attempting to delete cultural object with ID: ${id}`);
+  
   try {
-    await conn.beginTransaction();
-    await conn.query('DELETE FROM images WHERE cultural_object_id = ?', [id]);
-    await conn.query('DELETE FROM object_details WHERE cultural_object_id = ?', [id]);
-    await conn.query('DELETE FROM cultural_objects WHERE id = ?', [id]);
-    await conn.commit();
-    try { await logActivity(req, 'cobject.delete', { culturalObjectId: id }); } catch {}
-    res.json({ success: true });
+    // First, check if the cultural object exists
+    const [checkResult] = await pool.query('SELECT id, name FROM cultural_objects WHERE id = ?', [id]);
+    console.log(`🔍 Object to delete:`, checkResult);
+    
+    if (checkResult.length === 0) {
+      console.log(`❌ Object with ID ${id} not found`);
+      return res.status(404).json({ success: false, error: 'Cultural object not found' });
+    }
+    
+    const objectName = checkResult[0].name;
+    console.log(`🗑️ Found cultural object: ${objectName}`);
+    
+    // Delete from cultural_objects table - CASCADE will handle related tables
+    const [result] = await pool.query('DELETE FROM cultural_objects WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      console.log(`❌ No cultural object was deleted - object may not exist`);
+      return res.status(404).json({ success: false, error: 'Cultural object not found' });
+    }
+    
+    console.log(`✅ Successfully deleted cultural object ${id} (${objectName}) and all related records`);
+    try { await logActivity(req, 'cobject.delete', { culturalObjectId: id, objectName }); } catch {}
+    res.json({ success: true, message: 'Cultural object deleted successfully' });
   } catch (err) {
-    await conn.rollback();
-    console.error('Error deleting cultural object:', err);
-    res.status(500).json({ error: 'Database error' });
-  } finally {
-    conn.release();
+    console.error('❌ Error deleting cultural object:', err);
+    console.error('❌ Error details:', err.message);
+    res.status(500).json({ success: false, error: 'Database error: ' + err.message });
   }
 });
 
@@ -223,11 +298,150 @@ router.get('/category/:category', async (req, res) => {
     );
     const objectsWithImages = objects.map(obj => ({
       ...obj,
-      images: images.filter(img => img.cultural_object_id === obj.id).map(img => img.url)
+      images: images.filter(img => img.cultural_object_id === obj.cultural_object_id).map(img => img.url)
     }));
     res.json(objectsWithImages);
   } catch (err) {
     console.error('Error fetching cultural objects by category:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// GET maintenance overview
+router.get('/maintenance/overview', async (req, res) => {
+  try {
+    const [maintenanceData] = await pool.query(`
+      SELECT 
+        co.id as object_id,
+        co.name as object_name,
+        co.category,
+        od.condition_status,
+        od.last_maintenance_date,
+        od.next_maintenance_date,
+        od.maintenance_frequency_months,
+        od.maintenance_priority,
+        od.maintenance_status,
+        od.maintenance_reminder_enabled,
+        od.maintenance_cost,
+        od.maintenance_notes,
+        CASE 
+          WHEN od.next_maintenance_date IS NULL THEN 'No maintenance scheduled'
+          WHEN od.next_maintenance_date < CURDATE() THEN 'Overdue'
+          WHEN od.next_maintenance_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'Due Soon'
+          ELSE 'Up to Date'
+        END as maintenance_alert_status,
+        DATEDIFF(od.next_maintenance_date, CURDATE()) as days_until_maintenance
+      FROM cultural_objects co
+      LEFT JOIN object_details od ON co.id = od.cultural_object_id
+      WHERE od.maintenance_reminder_enabled = TRUE
+      ORDER BY od.next_maintenance_date ASC
+    `);
+    res.json(maintenanceData);
+  } catch (err) {
+    console.error('Error fetching maintenance overview:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// GET maintenance alerts (overdue and due soon)
+router.get('/maintenance/alerts', async (req, res) => {
+  try {
+    const [alerts] = await pool.query(`
+      SELECT 
+        co.id as object_id,
+        co.name as object_name,
+        co.category,
+        od.condition_status,
+        od.next_maintenance_date,
+        od.maintenance_priority,
+        od.maintenance_notes,
+        CASE 
+          WHEN od.next_maintenance_date < CURDATE() THEN 'Overdue'
+          WHEN od.next_maintenance_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'Due Soon'
+        END as alert_type,
+        DATEDIFF(od.next_maintenance_date, CURDATE()) as days_until_maintenance
+      FROM cultural_objects co
+      LEFT JOIN object_details od ON co.id = od.cultural_object_id
+      WHERE od.maintenance_reminder_enabled = TRUE
+      AND (od.next_maintenance_date < CURDATE() OR od.next_maintenance_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY))
+      ORDER BY od.next_maintenance_date ASC
+    `);
+    res.json(alerts);
+  } catch (err) {
+    console.error('Error fetching maintenance alerts:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// UPDATE maintenance status for an object
+router.put('/:id/maintenance', async (req, res) => {
+  const { id } = req.params;
+  const {
+    last_maintenance_date,
+    next_maintenance_date,
+    maintenance_notes,
+    maintenance_cost,
+  } = req.body;
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Update maintenance information
+    await conn.query(
+      `UPDATE object_details SET
+        last_maintenance_date = ?,
+        next_maintenance_date = ?,
+        maintenance_notes = ?,
+        maintenance_cost = ?,
+ = ?,
+        maintenance_status = CASE 
+          WHEN ? IS NULL THEN 'up_to_date'
+          WHEN ? < CURDATE() THEN 'overdue'
+          WHEN ? <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'due_soon'
+          ELSE 'up_to_date'
+        END
+       WHERE cultural_object_id = ?`,
+      [
+        last_maintenance_date, next_maintenance_date, maintenance_notes,
+        maintenance_cost, next_maintenance_date,
+        next_maintenance_date, next_maintenance_date, id
+      ]
+    );
+
+    await conn.commit();
+    try { await logActivity(req, 'cobject.maintenance.update', { culturalObjectId: id }); } catch {}
+    res.json({ success: true });
+  } catch (err) {
+    await conn.rollback();
+    console.error('Error updating maintenance:', err);
+    res.status(500).json({ error: 'Database error' });
+  } finally {
+    conn.release();
+  }
+});
+
+// GET maintenance history for an object
+router.get('/:id/maintenance/history', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [history] = await pool.query(`
+      SELECT 
+        last_maintenance_date,
+        next_maintenance_date,
+        maintenance_notes,
+        maintenance_cost,
+,
+        maintenance_priority,
+        maintenance_frequency_months,
+        maintenance_status,
+        updated_at
+      FROM object_details 
+      WHERE cultural_object_id = ?
+    `, [id]);
+    res.json(history[0] || {});
+  } catch (err) {
+    console.error('Error fetching maintenance history:', err);
     res.status(500).json({ error: 'Database error' });
   }
 });

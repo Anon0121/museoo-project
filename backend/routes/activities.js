@@ -1,13 +1,25 @@
 const express = require('express');
 const multer = require('multer');
 const pool = require('../db');
-const { logActivity } = require('../utils/activityLogger');
+const { logActivity, logUserActivity } = require('../utils/activityLogger');
 const router = express.Router();
+
+// Session-based authentication middleware
+const isAuthenticated = (req, res, next) => {
+  if (req.session && req.session.user) {
+    req.user = req.session.user;
+    return next();
+  }
+  return res.status(401).json({ 
+    success: false, 
+    message: 'Not authenticated' 
+  });
+};
 
 const upload = multer({ dest: 'uploads/' }); // images will be saved in /uploads
 
 // Create a new activity (event or exhibit) with details and images
-router.post('/', upload.array('images'), async (req, res) => {
+router.post('/', isAuthenticated, logUserActivity, upload.array('images'), async (req, res) => {
   const { title, description, type, ...details } = req.body;
   const files = req.files;
 
@@ -132,22 +144,94 @@ router.get('/events', async (req, res) => {
   }
 });
 
-// Delete an activity (event or exhibit) and its details and images
-router.delete('/:id', async (req, res) => {
+// Update an activity (event or exhibit) with details and images
+router.put('/:id', isAuthenticated, logUserActivity, upload.array('images'), async (req, res) => {
   const { id } = req.params;
+  const { title, description, type, ...details } = req.body;
+  const files = req.files;
+
   try {
-    // Delete from images
-    await pool.query('DELETE FROM images WHERE activity_id = ?', [id]);
-    // Delete from event_details and exhibit_details (one will succeed, the other will do nothing)
-    await pool.query('DELETE FROM event_details WHERE activity_id = ?', [id]);
-    await pool.query('DELETE FROM exhibit_details WHERE activity_id = ?', [id]);
-    // Delete from activities
-    await pool.query('DELETE FROM activities WHERE id = ?', [id]);
-    try { await logActivity(req, 'activity.delete', { activityId: id }); } catch {}
+    // 1. Update activities table
+    await pool.query(
+      'UPDATE activities SET title = ?, description = ? WHERE id = ?',
+      [title, description, id]
+    );
+
+    // 2. Update event_details or exhibit_details
+    if (type === 'event') {
+      await pool.query(
+        'UPDATE event_details SET start_date = ?, time = ?, location = ?, organizer = ? WHERE activity_id = ?',
+        [details.startDate, details.time, details.location, details.organizer, id]
+      );
+      
+      // Update activities table with capacity info for events
+      if (details.max_capacity) {
+        await pool.query(
+          'UPDATE activities SET max_capacity = ? WHERE id = ?',
+          [details.max_capacity, id]
+        );
+      }
+    } else if (type === 'exhibit') {
+      await pool.query(
+        'UPDATE exhibit_details SET start_date = ?, end_date = ?, location = ?, curator = ?, category = ? WHERE activity_id = ?',
+        [details.startDate, details.endDate, details.location, details.curator, details.category, id]
+      );
+      
+      // Update activities table with capacity info for exhibits
+      if (details.max_capacity) {
+        await pool.query(
+          'UPDATE activities SET max_capacity = ? WHERE id = ?',
+          [details.max_capacity, id]
+        );
+      }
+    }
+
+    // 3. Add new images if any
+    if (files && files.length > 0) {
+      for (const file of files) {
+        await pool.query(
+          'INSERT INTO images (activity_id, url) VALUES (?, ?)',
+          [id, `/uploads/${file.filename}`]
+        );
+      }
+    }
+
+    try { await logActivity(req, 'activity.update', { activityId: id, type, title }); } catch {}
     res.json({ success: true });
   } catch (err) {
-    console.error('Error deleting activity:', err);
+    console.error('Error updating activity:', err);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Delete an activity (event or exhibit) and its details and images
+router.delete('/:id', isAuthenticated, logUserActivity, async (req, res) => {
+  const { id } = req.params;
+  try {
+    console.log(`🗑️ Deleting activity with ID: ${id}`);
+    
+    // First, check if the activity exists
+    const [activityCheck] = await pool.query('SELECT id, title, type FROM activities WHERE id = ?', [id]);
+    if (activityCheck.length === 0) {
+      return res.status(404).json({ success: false, error: 'Activity not found' });
+    }
+    
+    const activity = activityCheck[0];
+    console.log(`🗑️ Found activity: ${activity.title} (${activity.type})`);
+    
+    // Delete from activities table - CASCADE will handle related tables
+    const [result] = await pool.query('DELETE FROM activities WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, error: 'Activity not found' });
+    }
+    
+    console.log(`✅ Successfully deleted activity ${id} and all related records`);
+    try { await logActivity(req, 'activity.delete', { activityId: id, title: activity.title, type: activity.type }); } catch {}
+    res.json({ success: true, message: 'Activity deleted successfully' });
+  } catch (err) {
+    console.error('❌ Error deleting activity:', err);
+    res.status(500).json({ success: false, error: 'Database error: ' + err.message });
   }
 });
 

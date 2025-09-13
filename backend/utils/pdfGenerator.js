@@ -250,11 +250,11 @@ function generateReportPDF(report) {
     <div class="section">
         <h2>Visitor Demographics</h2>
         <div class="chart-section">
-            <div class="chart-title">Nationality Distribution</div>
+            <div class="chart-title">Visitor Type Distribution</div>
             <table class="visitor-table">
                 <thead>
                     <tr>
-                        <th>Nationality</th>
+                        <th>Visitor Type</th>
                         <th>Count</th>
                         <th>Percentage</th>
                     </tr>
@@ -264,7 +264,7 @@ function generateReportPDF(report) {
                         const percentage = reportData.totalVisitors > 0 ? ((demo.count / reportData.totalVisitors) * 100).toFixed(1) : 0;
                         return `
                             <tr>
-                                <td>${demo.nationality}</td>
+                                <td>${demo.visitor_type}</td>
                                 <td>${demo.count}</td>
                                 <td>${percentage}%</td>
                             </tr>
@@ -318,7 +318,7 @@ function generateReportPDF(report) {
                     <th>Visitor ID</th>
                     <th>Name</th>
                     <th>Gender</th>
-                    <th>Nationality</th>
+                    <th>Visitor Type</th>
                     <th>Email</th>
                     <th>Purpose</th>
                     <th>Entry Date</th>
@@ -333,7 +333,7 @@ function generateReportPDF(report) {
                         <td>${visitor.visitor_id}</td>
                         <td><strong>${visitor.first_name} ${visitor.last_name}</strong></td>
                         <td>${visitor.gender}</td>
-                        <td>${visitor.nationality}</td>
+                        <td>${visitor.visitor_type}</td>
                         <td>${visitor.email}</td>
                         <td>${visitor.purpose}</td>
                         <td>${formatDate(visitor.visit_date)}</td>
@@ -394,11 +394,11 @@ function generateExcelContent(report) {
   // Add demographics data
   if (reportData.demographics && reportData.demographics.length > 0) {
     csvRows.push(['Visitor Demographics']);
-    csvRows.push(['Nationality', 'Count', 'Percentage']);
-    reportData.demographics.forEach(demo => {
-      const percentage = reportData.totalVisitors > 0 ? ((demo.count / reportData.totalVisitors) * 100).toFixed(1) : 0;
-      csvRows.push([demo.nationality, demo.count, `${percentage}%`]);
-    });
+            csvRows.push(['Visitor Type', 'Count', 'Percentage']);
+        reportData.demographics.forEach(demo => {
+            const percentage = reportData.totalVisitors > 0 ? ((demo.count / reportData.totalVisitors) * 100).toFixed(1) : 0;
+            csvRows.push([demo.visitor_type, demo.count, `${percentage}%`]);
+        });
     csvRows.push(['']);
   }
 
@@ -417,7 +417,7 @@ function generateExcelContent(report) {
   if (reportData.visitorDetails && reportData.visitorDetails.length > 0) {
     csvRows.push(['Complete Visitor Information']);
     csvRows.push([
-      'Visitor ID', 'First Name', 'Last Name', 'Gender', 'Nationality', 
+      'Visitor ID', 'First Name', 'Last Name', 'Gender', 'Visitor Type', 
       'Email', 'Purpose', 'Entry Date', 'QR Scan Time', 'Time Slot', 'Status'
     ]);
     reportData.visitorDetails.forEach(visitor => {
@@ -426,7 +426,7 @@ function generateExcelContent(report) {
         visitor.first_name,
         visitor.last_name,
         visitor.gender,
-        visitor.nationality,
+        visitor.visitor_type,
         visitor.email,
         visitor.purpose,
         formatDate(visitor.visit_date),

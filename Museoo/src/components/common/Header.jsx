@@ -6,7 +6,7 @@ import citymus from "../../assets/citymus.jpg";
 import logo from "../../assets/logo.png";
 import SearchBar from "./SearchBar";
 
-const Header = () => {
+const Header = ({ isModalOpen = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -21,7 +21,7 @@ const Header = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Close mobile menu when clicking outside
+  // Close mobile menu when clicking outside or when modal opens
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (isMenuOpen && !event.target.closest('.mobile-menu')) {
@@ -31,6 +31,13 @@ const Header = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMenuOpen]);
+
+  // Close mobile menu when modal opens
+  useEffect(() => {
+    if (isModalOpen && isMenuOpen) {
+      setIsMenuOpen(false);
+    }
+  }, [isModalOpen, isMenuOpen]);
 
   return (
     <section
@@ -42,7 +49,11 @@ const Header = () => {
     >
       {/* Navigation */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'bg-white/95 backdrop-blur-md shadow-lg' : 'bg-transparent'
+        isModalOpen 
+          ? 'hidden' 
+          : isScrolled 
+            ? 'bg-white/95 backdrop-blur-md shadow-lg' 
+            : 'bg-transparent'
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-3 sm:py-4">
@@ -51,12 +62,12 @@ const Header = () => {
               <img src={logo} alt="Logo" className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16" />
               <div className="hidden sm:block">
                 <h1 className={`text-sm sm:text-lg font-bold transition-colors duration-300 ${
-                  isScrolled ? 'text-gray-800' : 'text-white'
+                  isModalOpen ? 'text-white drop-shadow-lg' : isScrolled ? 'text-gray-800' : 'text-white'
                 }`}>
                   Cagayan de Oro City Museum
                 </h1>
                 <p className={`text-xs transition-colors duration-300 ${
-                  isScrolled ? 'text-gray-600' : 'text-gray-300'
+                  isModalOpen ? 'text-white/90 drop-shadow-lg' : isScrolled ? 'text-gray-600' : 'text-gray-300'
                 }`}>
                   Heritage Studies Center
                 </p>
@@ -68,7 +79,11 @@ const Header = () => {
               <a 
                 href="#home" 
                 className={`nav-link font-semibold transition-all duration-300 hover:text-[#8B6B21] ${
-                  isScrolled ? 'text-gray-700 hover:text-[#8B6B21]' : 'text-white hover:text-[#8B6B21]'
+                  isModalOpen 
+                    ? 'text-white drop-shadow-lg hover:text-[#8B6B21]' 
+                    : isScrolled 
+                      ? 'text-gray-700 hover:text-[#8B6B21]' 
+                      : 'text-white hover:text-[#8B6B21]'
                 }`}
               >
                 HOME
@@ -76,7 +91,11 @@ const Header = () => {
               <a 
                 href="#about" 
                 className={`nav-link font-semibold transition-all duration-300 hover:text-[#8B6B21] ${
-                  isScrolled ? 'text-gray-700 hover:text-[#8B6B21]' : 'text-white hover:text-[#8B6B21]'
+                  isModalOpen 
+                    ? 'text-white drop-shadow-lg hover:text-[#8B6B21]' 
+                    : isScrolled 
+                      ? 'text-gray-700 hover:text-[#8B6B21]' 
+                      : 'text-white hover:text-[#8B6B21]'
                 }`}
               >
                 ABOUT
@@ -84,7 +103,11 @@ const Header = () => {
               <a 
                 href="#promotional" 
                 className={`nav-link font-semibold transition-all duration-300 hover:text-[#8B6B21] ${
-                  isScrolled ? 'text-gray-700 hover:text-[#8B6B21]' : 'text-white hover:text-[#8B6B21]'
+                  isModalOpen 
+                    ? 'text-white drop-shadow-lg hover:text-[#8B6B21]' 
+                    : isScrolled 
+                      ? 'text-gray-700 hover:text-[#8B6B21]' 
+                      : 'text-white hover:text-[#8B6B21]'
                 }`}
               >
                 HIGHLIGHTS
@@ -92,7 +115,11 @@ const Header = () => {
               <a 
                 href="#exhibit" 
                 className={`nav-link font-semibold transition-all duration-300 hover:text-[#8B6B21] ${
-                  isScrolled ? 'text-gray-700 hover:text-[#8B6B21]' : 'text-white hover:text-[#8B6B21]'
+                  isModalOpen 
+                    ? 'text-white drop-shadow-lg hover:text-[#8B6B21]' 
+                    : isScrolled 
+                      ? 'text-gray-700 hover:text-[#8B6B21]' 
+                      : 'text-white hover:text-[#8B6B21]'
                 }`}
               >
                 EXHIBITS
@@ -100,7 +127,11 @@ const Header = () => {
               <a 
                 href="#event" 
                 className={`nav-link font-semibold transition-all duration-300 hover:text-[#8B6B21] ${
-                  isScrolled ? 'text-gray-700 hover:text-[#8B6B21]' : 'text-white hover:text-[#8B6B21]'
+                  isModalOpen 
+                    ? 'text-white drop-shadow-lg hover:text-[#8B6B21]' 
+                    : isScrolled 
+                      ? 'text-gray-700 hover:text-[#8B6B21]' 
+                      : 'text-white hover:text-[#8B6B21]'
                 }`}
               >
                 EVENTS
@@ -108,7 +139,11 @@ const Header = () => {
               <a 
                 href="#contact" 
                 className={`nav-link font-semibold transition-all duration-300 hover:text-[#8B6B21] ${
-                  isScrolled ? 'text-gray-700 hover:text-[#8B6B21]' : 'text-white hover:text-[#8B6B21]'
+                  isModalOpen 
+                    ? 'text-white drop-shadow-lg hover:text-[#8B6B21]' 
+                    : isScrolled 
+                      ? 'text-gray-700 hover:text-[#8B6B21]' 
+                      : 'text-white hover:text-[#8B6B21]'
                 }`}
               >
                 CONTACT
@@ -123,7 +158,11 @@ const Header = () => {
               <FontAwesomeIcon 
                 icon={isMenuOpen ? faXmark : faBars} 
                 className={`text-xl transition-colors duration-300 ${
-                  isScrolled ? 'text-gray-700' : 'text-white'
+                  isModalOpen 
+                    ? 'text-white drop-shadow-lg' 
+                    : isScrolled 
+                      ? 'text-gray-700' 
+                      : 'text-white'
                 }`} 
               />
             </button>
@@ -132,14 +171,14 @@ const Header = () => {
       </nav>
 
       {/* Mobile Menu Overlay */}
-      {isMenuOpen && (
+      {isMenuOpen && !isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsMenuOpen(false)} />
       )}
 
       {/* Mobile Menu */}
       <div
         className={`mobile-menu fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl z-50 transform transition-transform duration-300 ${
-          isMenuOpen ? "translate-x-0" : "translate-x-full"
+          isMenuOpen && !isModalOpen ? "translate-x-0" : "translate-x-full"
         } lg:hidden`}
       >
         <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-200">
@@ -243,10 +282,12 @@ const Header = () => {
       </div>
 
       {/* Search Modal */}
-      {showSearch && <SearchBar onClose={() => setShowSearch(false)} />}
+      {showSearch && !isModalOpen && <SearchBar onClose={() => setShowSearch(false)} />}
 
       {/* Hero Content */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center px-4 sm:px-6 text-white max-w-4xl w-full">
+      <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center px-4 sm:px-6 text-white max-w-4xl w-full transition-all duration-300 ${
+        isModalOpen ? 'hidden' : ''
+      }`}>
         <div className="mb-6 sm:mb-8">
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-4 sm:mb-6 leading-tight">
             Cagayan De Oro
@@ -286,7 +327,7 @@ const Header = () => {
       </div>
 
       {/* Back to Top Button */}
-      {showBackToTop && (
+      {showBackToTop && !isModalOpen && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 bg-gradient-to-r from-[#8B6B21] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#8B6B21] text-white p-3 sm:p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-110 z-50"

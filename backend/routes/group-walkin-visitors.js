@@ -1,367 +1,334 @@
 const express = require('express');
 const pool = require('../db');
 const router = express.Router();
+const { logActivity } = require('../utils/activityLogger');
 const QRCode = require('qrcode');
 const nodemailer = require('nodemailer');
-const { logActivity } = require('../utils/activityLogger');
 
-// Email transporter configuration
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'museosmart@gmail.com',
-    pass: 'museosmart123'
-  }
-});
-
-// Get group walk-in visitor token info
-router.get('/:tokenId', async (req, res) => {
-  const { tokenId } = req.params;
+// GET - Fetch group walk-in visitor data by token
+router.get('/:token', async (req, res) => {
+  const { token } = req.params;
   
   try {
-    // Get token information with booking details and group leader info
-    const [tokenRows] = await pool.query(
-      `SELECT av.*, b.date as visit_date, b.time_slot, b.status as booking_status, b.booking_id, b.type as booking_type,
-              v.institution as group_leader_institution, v.purpose as group_leader_purpose
-       FROM additional_visitors av
-       JOIN bookings b ON av.booking_id = b.booking_id
-       LEFT JOIN visitors v ON b.booking_id = v.booking_id AND v.is_main_visitor = 1
-       WHERE av.token_id = ?`,
-      [tokenId]
+    // Find the visitor by token in additional_visitors table
+    const [visitorRows] = await pool.query(
+      `SELECT * FROM additional_visitors WHERE token_id = ?`,
+      [token]
     );
-    
-    if (tokenRows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Token not found or expired'
+
+    if (visitorRows.length === 0) {
+      return res.json({ 
+        success: false, 
+        message: 'Visitor not found or token has expired' 
       });
     }
-    
-    const tokenInfo = tokenRows[0];
-    
-    // Check if booking is still valid
-    if (tokenInfo.booking_status === 'cancelled') {
-      return res.status(400).json({
-        success: false,
-        error: 'This booking has been cancelled'
+
+    const visitor = visitorRows[0];
+
+    // Check if token has expired (24 hours)
+    if (visitor.expires_at && new Date() > new Date(visitor.expires_at)) {
+      return res.json({ 
+        success: false, 
+        message: 'This form link has expired. Please contact the museum for assistance.' 
       });
     }
-    
-    // Check if token has expired (for walk-in types)
-    if (tokenInfo.expires_at && new Date() > new Date(tokenInfo.expires_at)) {
-      return res.status(400).json({
-        success: false,
-        error: 'This link has expired. Please contact the museum for assistance.',
-        linkExpired: true
+
+    // Check if form has already been completed
+    if (visitor.status === 'completed') {
+      return res.json({ 
+        success: false, 
+        message: 'This form has already been completed. Please contact the museum if you need to make changes.' 
       });
     }
-    
+
     res.json({
       success: true,
-      tokenInfo: {
-        tokenId: tokenInfo.token_id,
-        email: tokenInfo.email,
-        status: tokenInfo.status,
-        visitDate: tokenInfo.visit_date,
-        visitTime: tokenInfo.time_slot,
-        bookingId: tokenInfo.booking_id,
-        bookingType: tokenInfo.booking_type,
-        linkExpired: tokenInfo.expires_at ? (new Date() > new Date(tokenInfo.expires_at)) : false,
-        details: tokenInfo.details ? JSON.parse(tokenInfo.details) : null,
-        groupLeaderInstitution: tokenInfo.group_leader_institution,
-        groupLeaderPurpose: tokenInfo.group_leader_purpose
+      visitor: {
+        token_id: visitor.token_id,
+        email: visitor.email,
+        first_name: visitor.first_name || '',
+        last_name: visitor.last_name || '',
+        gender: visitor.gender || '',
+        visitor_type: visitor.visitor_type || 'local',
+        address: visitor.address || '',
+        institution: visitor.institution || '',
+        purpose: visitor.purpose || '',
+        status: visitor.status
       }
     });
-    
-  } catch (err) {
-    console.error('Error fetching token info:', err);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch token information'
+
+  } catch (error) {
+    console.error('Error fetching group walk-in visitor:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while fetching visitor data' 
     });
   }
 });
 
-// Update group walk-in visitor details and generate QR code
-router.put('/:tokenId', async (req, res) => {
-  const { tokenId } = req.params;
-  const { firstName, lastName, gender, address, visitorType, institution, purpose } = req.body;
-  
-  let connection;
-  
+// PUT - Update group walk-in visitor information
+router.put('/:token', async (req, res) => {
+  const { token } = req.params;
+  const {
+    firstName,
+    lastName,
+    gender,
+    visitorType,
+    email,
+    address,
+    institution,
+    purpose
+  } = req.body;
+
   try {
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
-    
-    // First, get token information
-    const [tokenRows] = await connection.query(
-      `SELECT av.*, b.status as booking_status, b.booking_id, b.type as booking_type, b.date as visit_date, b.time_slot
-       FROM additional_visitors av
-       JOIN bookings b ON av.booking_id = b.booking_id
-       WHERE av.token_id = ?`,
-      [tokenId]
+    // Validate required fields
+    if (!firstName || !lastName || !gender || !visitorType || !email || !address) {
+      return res.json({
+        success: false,
+        message: 'Please fill in all required fields'
+      });
+    }
+
+    // Check if visitor exists and token is valid
+    const [visitorRows] = await pool.query(
+      `SELECT * FROM additional_visitors WHERE token_id = ?`,
+      [token]
     );
-    
-    if (tokenRows.length === 0) {
-      await connection.rollback();
-      return res.status(404).json({
+
+    if (visitorRows.length === 0) {
+      return res.json({
         success: false,
-        error: 'Token not found or expired'
+        message: 'Visitor not found or token has expired'
       });
     }
-    
-    const tokenInfo = tokenRows[0];
-    
-    // Check if booking is still valid
-    if (tokenInfo.booking_status === 'cancelled') {
-      await connection.rollback();
-      return res.status(400).json({
+
+    const visitor = visitorRows[0];
+
+    // Check if token has expired
+    if (visitor.expires_at && new Date() > new Date(visitor.expires_at)) {
+      return res.json({
         success: false,
-        error: 'This booking has been cancelled'
+        message: 'This form link has expired. Please contact the museum for assistance.'
       });
     }
-    
-    // Check if already completed
-    if (tokenInfo.status === 'completed') {
-      await connection.rollback();
-      return res.status(400).json({
+
+    // Check if form has already been completed
+    if (visitor.status === 'completed') {
+      return res.json({
         success: false,
-        error: 'Profile has already been completed'
+        message: 'This form has already been completed. Please contact the museum if you need to make changes.'
       });
     }
-    
-    // Store visitor information in the details column as JSON
-    const visitorDetails = {
-      firstName,
-      lastName,
-      address,
-      institution,
-      purpose,
-      gender,
-      visitorType,
-      completedAt: new Date().toISOString()
-    };
-    
-    // Update the additional_visitors record with visitor information
-    await connection.execute(
-      `UPDATE additional_visitors 
-       SET details = ?, status = 'completed', details_completed_at = NOW()
+
+    // Update visitor information
+    await pool.query(
+      `UPDATE additional_visitors SET 
+        first_name = ?, 
+        last_name = ?, 
+        gender = ?, 
+        visitor_type = ?, 
+        email = ?, 
+        address = ?, 
+        institution = ?, 
+        purpose = ?, 
+        status = 'completed',
+        updated_at = NOW()
        WHERE token_id = ?`,
-      [JSON.stringify(visitorDetails), tokenId]
+      [firstName, lastName, gender, visitorType, email, address, institution, purpose, token]
     );
-    
-         // Create a visitor record
-     const [visitorResult] = await connection.execute(
-       `INSERT INTO visitors (
-         booking_id, first_name, last_name, email, gender, visitor_type, 
-         address, institution, purpose, status, 
-         is_main_visitor, created_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-       [
-         tokenInfo.booking_id,
-         firstName,
-         lastName,
-         tokenInfo.email,
-         gender,
-         visitorType,
-         address,
-         institution,
-         purpose,
-         'pending',
-         0
-       ]
-     );
-    
-    const visitorId = visitorResult.insertId;
-    
+
     // Generate QR code for this visitor
     const qrData = {
-      type: 'walkin_visitor',
-      visitorId: visitorId,
-      bookingId: tokenInfo.booking_id
+      type: 'group_walkin_visitor',
+      tokenId: token,
+      bookingId: visitor.booking_id,
+      email: email,
+      visitorName: `${firstName} ${lastName}`
     };
-    
+
     const qrCodeDataUrl = await QRCode.toDataURL(JSON.stringify(qrData));
-    
-    // Update visitors table with QR code
-    await connection.execute(
-      `UPDATE visitors SET qr_code = ? WHERE visitor_id = ?`,
-      [qrCodeDataUrl, visitorId]
+    const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
+
+    // Generate backup code
+    const backupCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    // Store QR code and backup code
+    await pool.query(
+      `UPDATE additional_visitors SET 
+        qr_code = ?, 
+        backup_code = ? 
+       WHERE token_id = ?`,
+      [base64Data, backupCode, token]
     );
-    
-    // Use visitor ID as backup code
-    const backupCode = visitorId;
-    
-    // Send email with QR code
-    const emailContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #AB8841 0%, #2e2b41 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
-          <h1 style="margin: 0; font-size: 24px;">Museum Visit Confirmation</h1>
-          <p style="margin: 10px 0 0 0; opacity: 0.9;">Your group walk-in visit is confirmed!</p>
-        </div>
-        
-        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          <h2 style="color: #2e2b41; margin-top: 0;">Hello ${firstName} ${lastName},</h2>
-          
-          <p style="color: #555; line-height: 1.6;">
-            Thank you for completing your profile information. Your group walk-in museum visit has been confirmed!
-          </p>
-          
-          <div style="background: #f8f9fa; border-left: 4px solid #AB8841; padding: 15px; margin: 20px 0;">
-            <h3 style="color: #2e2b41; margin-top: 0;">Visit Details:</h3>
-            <p style="margin: 5px 0;"><strong>Date:</strong> ${tokenInfo.visit_date}</p>
-            <p style="margin: 5px 0;"><strong>Time:</strong> ${tokenInfo.time_slot}</p>
-            <p style="margin: 5px 0;"><strong>Purpose:</strong> ${purpose}</p>
-          </div>
-          
-          <div style="text-align: center; margin: 30px 0;">
-            <h3 style="color: #2e2b41;">Your QR Code</h3>
-            <img src="${qrCodeDataUrl}" alt="QR Code" style="max-width: 200px; border: 2px solid #AB8841; border-radius: 10px;"/>
-            <p style="color: #666; font-size: 14px; margin-top: 10px;">
-              Present this QR code at the museum entrance for check-in
-            </p>
-          </div>
-          
-          <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; margin: 25px 0; border-radius: 5px;">
-            <h3 style="margin: 0 0 15px 0; color: #856404;">🔑 Backup Code</h3>
-            <p style="margin: 0 0 10px 0; font-size: 14px; color: #2e2b41;">If your QR code doesn't work, use this backup code:</p>
-            <div style="background: #f8f9fa; padding: 15px; text-align: center; margin: 10px 0; border-radius: 5px;">
-                <h2 style="color: #AB8841; font-size: 24px; margin: 0; letter-spacing: 3px; font-family: monospace;">${backupCode}</h2>
+
+    // Send confirmation email with QR code
+    try {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: 'museoweb1@gmail.com',
+          pass: 'akrtgds yyprsfxyi'
+        }
+      });
+
+      const emailHtml = `
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #AB8841 0%, #8B6B21 100%); padding: 30px; text-align: center; color: white;">
+                <h1 style="margin: 0; font-size: 28px;">🎫 Your Group Walk-In QR Code is Ready!</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px;">Your visitor information has been updated successfully</p>
             </div>
-            <p style="margin: 0; font-size: 12px; color: #856404;">
-                <strong>Important:</strong> Use this backup code only if QR code scanning fails.
-            </p>
-          </div>
-          
-          <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 20px 0;">
-            <h4 style="color: #856404; margin-top: 0;">Important Information:</h4>
-            <ul style="color: #856404; margin: 5px 0; padding-left: 20px;">
-              <li>Please arrive 10 minutes before your scheduled time</li>
-              <li>Bring a valid ID for verification</li>
-              <li>Follow all museum guidelines and safety protocols</li>
-              <li>This QR code is unique to you and cannot be shared</li>
-            </ul>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <p style="color: #666; font-size: 14px;">
-              If you have any questions, please contact us at museosmart@gmail.com
-            </p>
-          </div>
-        </div>
-        
-        <div style="text-align: center; margin-top: 20px; color: #666; font-size: 12px;">
-          <p>© 2024 Museum Smart System. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-    
-    const mailOptions = {
-      from: 'museosmart@gmail.com',
-      to: tokenInfo.email,
-      subject: 'Museum Visit Confirmation - Group Walk-in',
-      html: emailContent
-    };
-    
-    await transporter.sendMail(mailOptions);
-    
-    await connection.commit();
-    
+            
+            <div style="padding: 30px; background: #faf7f1;">
+                <h2 style="color: #2e2b41; margin-bottom: 20px;">Hello ${firstName}!</h2>
+                
+                <p style="color: #2e2b41;">Your group walk-in visitor information has been updated successfully. Your QR code is now ready for museum check-in.</p>
+                
+                <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #AB8841;">
+                    <h3 style="color: #AB8841; margin-top: 0;">📋 Your QR Code</h3>
+                    <p style="color: #2e2b41;">Your QR code is attached to this email. Please present it at the museum entrance for check-in.</p>
+                </div>
+                
+                <div style="background: #f5f4f7; border: 1px solid #2e2b41; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #2e2b41;">📅 Your Information</h4>
+                    <p style="color: #2e2b41;"><strong>Name:</strong> ${firstName} ${lastName}</p>
+                    <p style="color: #2e2b41;"><strong>Email:</strong> ${email}</p>
+                    <p style="color: #2e2b41;"><strong>Visitor Type:</strong> ${visitorType}</p>
+                    <p style="color: #2e2b41;"><strong>Status:</strong> ✅ Ready for Check-in</p>
+                </div>
+                
+                <div style="background: #fff3cd; border: 1px solid #AB8841; border-radius: 5px; padding: 15px; margin: 20px 0;">
+                    <h4 style="margin-top: 0; color: #8B6B21;">🔑 Backup Code</h4>
+                    <p style="margin: 0; font-size: 14px; color: #8B6B21;">
+                        If your QR code doesn't work, use this backup code: <strong>${backupCode}</strong>
+                    </p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #AB8841;">
+                    <p style="margin: 0; color: #AB8841;">Best regards,<br><strong>MuseoSmart Team</strong></p>
+                </div>
+            </div>
+        </body>
+        </html>
+      `;
+
+      await transporter.sendMail({
+        from: 'MuseoSmart <museoweb1@gmail.com>',
+        to: email,
+        subject: '🎫 Your Group Walk-In QR Code is Ready!',
+        html: emailHtml,
+        attachments: [{
+          filename: 'group_walkin_qr_code.png',
+          content: Buffer.from(base64Data, 'base64'),
+          contentType: 'image/png'
+        }]
+      });
+
+      console.log(`✅ Group walk-in visitor email sent to: ${email}`);
+    } catch (emailError) {
+      console.error('❌ Error sending email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    // Log the activity
+    try {
+      await logActivity(req, 'group_walkin_visitor.update', {
+        tokenId: token,
+        visitorName: `${firstName} ${lastName}`,
+        email: email
+      });
+    } catch (logError) {
+      console.error('Error logging activity:', logError);
+    }
+
     res.json({
       success: true,
-      message: 'Group walk-in profile completed successfully! Check your email for QR code.',
-             visitor: {
-         firstName,
-         lastName,
-         email: tokenInfo.email,
-         gender,
-         visitorType,
-         address,
-         institution,
-         purpose,
-         visitorId,
-         bookingId: tokenInfo.booking_id
-       }
+      message: 'Visitor information updated successfully. QR code has been sent to your email.'
     });
-    
-  } catch (err) {
-    if (connection) {
-      await connection.rollback();
-    }
-    console.error('Error updating group walk-in visitor:', err);
+
+  } catch (error) {
+    console.error('Error updating group walk-in visitor:', error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error: ' + err.message
+      message: 'Server error while updating visitor information'
     });
-  } finally {
-    if (connection) {
-      connection.release();
-    }
   }
 });
 
-// Check in a group walk-in visitor
-router.post('/:visitorId/checkin', async (req, res) => {
-  const { visitorId } = req.params;
+// POST - Check-in group walk-in visitor (for QR code scanning)
+router.post('/:token/checkin', async (req, res) => {
+  const { token } = req.params;
   
   try {
-    // Get visitor information
+    // Find the visitor by token
     const [visitorRows] = await pool.query(
-      `SELECT v.*, b.type as booking_type 
-       FROM visitors v 
-       LEFT JOIN bookings b ON v.booking_id = b.booking_id 
-       WHERE v.visitor_id = ?`,
-      [visitorId]
+      `SELECT * FROM additional_visitors WHERE token_id = ?`,
+      [token]
     );
-    
+
     if (visitorRows.length === 0) {
-      return res.status(404).json({
+      return res.json({
         success: false,
-        error: 'Visitor not found'
+        message: 'Visitor not found'
       });
     }
-    
+
     const visitor = visitorRows[0];
-    
-    // Check if already checked in
-    if (visitor.status === 'visited') {
-      return res.status(400).json({
+
+    // Check if form has been completed
+    if (visitor.status !== 'completed') {
+      return res.json({
         success: false,
-        error: 'Visitor already checked in'
+        message: 'Visitor information not completed. Please complete the form first.'
       });
     }
-    
-    // Update visitor status to checked in
+
+    // Check if QR code has already been used
+    if (visitor.qr_used) {
+      return res.json({
+        success: false,
+        message: 'QR code has already been used for check-in'
+      });
+    }
+
+    // Mark QR code as used and record check-in time
     await pool.query(
-      `UPDATE visitors 
-       SET status = 'visited', checkin_time = NOW() 
-       WHERE visitor_id = ?`,
-      [visitorId]
+      `UPDATE additional_visitors SET 
+        qr_used = TRUE, 
+        checkin_time = NOW(),
+        updated_at = NOW()
+       WHERE token_id = ?`,
+      [token]
     );
-    
+
+    // Log the check-in activity
+    try {
+      await logActivity(req, 'group_walkin_visitor.checkin', {
+        tokenId: token,
+        visitorName: `${visitor.first_name} ${visitor.last_name}`,
+        email: visitor.email
+      });
+    } catch (logError) {
+      console.error('Error logging activity:', logError);
+    }
+
     res.json({
       success: true,
-      message: 'Group walk-in visitor checked in successfully!',
-             visitor: {
-         firstName: visitor.first_name,
-         lastName: visitor.last_name,
-         email: visitor.email,
-         gender: visitor.gender,
-         visitorType: visitor.visitor_type,
-         address: visitor.address,
-         institution: visitor.institution,
-         purpose: visitor.purpose,
-         checkin_time: new Date().toISOString(),
-         bookingType: visitor.booking_type,
-         visitorType: 'walkin_visitor'
-       }
+      message: `Welcome ${visitor.first_name} ${visitor.last_name}! Check-in successful.`,
+      visitor: {
+        name: `${visitor.first_name} ${visitor.last_name}`,
+        email: visitor.email,
+        visitorType: visitor.visitor_type,
+        institution: visitor.institution,
+        purpose: visitor.purpose
+      }
     });
-    
-  } catch (err) {
-    console.error('Error checking in group walk-in visitor:', err);
+
+  } catch (error) {
+    console.error('Error checking in group walk-in visitor:', error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      message: 'Server error during check-in'
     });
   }
 });

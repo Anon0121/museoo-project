@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import api, { API_BASE_URL } from "../../config/api";
 
 const VisitorScanner = () => {
-  const [scanned, setScanned] = useState("");
+  const [scanned, setScanned] = useState("")
   const [visitor, setVisitor] = useState(null);
   const [error, setError] = useState("");
   const [isScanning, setIsScanning] = useState(false);
@@ -127,7 +127,7 @@ const VisitorScanner = () => {
         cameraId,
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: { width: 350, height: 350 },
           aspectRatio: 1.0,
         },
         async (decodedText) => {
@@ -289,7 +289,7 @@ const VisitorScanner = () => {
             console.log("🎯 Detected: Additional Visitor QR Code (JSON format)");
             console.log("🔍 Additional Visitor QR Data:", qrData);
             
-            // Call the additional visitor check-in API
+            // Call the additional visitor check-in API with QR code data
             const apiUrl = `${API_BASE_URL}/api/additional-visitors/${qrData.tokenId}/checkin`;
             console.log("🌐 Sending request to:", apiUrl);
             
@@ -297,7 +297,10 @@ const VisitorScanner = () => {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-              }
+              },
+              body: JSON.stringify({
+                qrCodeData: decodedText // Pass the full QR code data to the backend
+              })
             });
             
             console.log("📡 API Response Status:", res.status);
@@ -624,28 +627,46 @@ const VisitorScanner = () => {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#AB8841] rounded-full mb-4">
-            <i className="fa-solid fa-key text-2xl text-white"></i>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 p-2">
+      <div className="max-w-4xl mx-auto">
+        {/* Compact Header */}
+        <div className="flex items-center justify-center mb-4">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center justify-center w-16 h-16 rounded-2xl shadow-lg" style={{backgroundColor: '#E5B80B'}}>
+              <i className="fa-solid fa-qrcode text-2xl text-white"></i>
+            </div>
+            <div className="text-left">
+              <h1 className="text-3xl font-bold mb-1" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                Visitor Check-In
+              </h1>
+              <p className="text-base text-gray-600" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                Scan QR codes or enter visitor ID to check in visitors
+              </p>
+            </div>
           </div>
-          <h1 className="text-3xl font-bold text-[#2e2b41] font-['Lora'] mb-2">
-            Visitor Check-In
-          </h1>
-          <p className="text-gray-600 font-['Telegraph']">
-            Scan QR codes or enter visitor ID to check in visitors
-          </p>
         </div>
+
+        {/* Main Content Grid */}
+        <div className="grid lg:grid-cols-2 gap-4 max-w-5xl mx-auto">
+            {/* Scanner Section */}
+            <div className="bg-white rounded-2xl shadow-lg p-4 border border-gray-100">
+              <div className="text-center mb-4">
+                <h2 className="text-xl font-bold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                  QR Scanner
+                </h2>
+                <p className="text-sm text-gray-600" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  Point your camera at a QR code
+                </p>
+              </div>
 
         {/* Security Warning */}
         {!isSecure && (
-          <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <h3 className="font-semibold text-yellow-800 mb-2 font-['Lora']">
-              <i className="fa-solid fa-exclamation-triangle mr-2"></i>
-              Camera Access Notice:
+              <div className="mb-6 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-4">
+                <h3 className="font-semibold text-amber-800 mb-2 flex items-center" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  <i className="fa-solid fa-exclamation-triangle mr-2 text-amber-600"></i>
+                  Camera Access Notice
             </h3>
-            <div className="text-sm text-yellow-700 font-['Telegraph']">
+                <div className="text-sm text-amber-700" style={{fontFamily: 'Telegraf, sans-serif'}}>
               Camera access requires HTTPS connection. Please use manual input as backup.
             </div>
           </div>
@@ -653,135 +674,197 @@ const VisitorScanner = () => {
         
         {/* Camera Error */}
         {cameraError && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <h3 className="font-semibold text-red-800 mb-2 font-['Lora']">
-              <i className="fa-solid fa-camera-slash mr-2"></i>
-              Camera Error:
+              <div className="mb-6 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 rounded-2xl p-4">
+                <h3 className="font-semibold text-red-800 mb-2 flex items-center" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  <i className="fa-solid fa-camera-slash mr-2 text-red-600"></i>
+                  Camera Error
             </h3>
-            <div className="text-sm text-red-700 font-['Telegraph']">{cameraError}</div>
+                <div className="text-sm text-red-700" style={{fontFamily: 'Telegraf, sans-serif'}}>{cameraError}</div>
           </div>
         )}
         
-        {/* Scanner Container */}
-        <div className="mb-6">
-          <div 
-            id="qr-reader" 
-            ref={scannerRef} 
-            className="w-full max-w-sm mx-auto border-4 border-[#AB8841] rounded-2xl overflow-hidden shadow-lg"
-            style={{ height: 320 }}
-          />
-          
-          {/* Scanner Status */}
-          <div className="mt-4 text-center">
-            {isScanning ? (
-              <div className="text-green-600 font-['Telegraph']">
-                <i className="fa-solid fa-camera mr-2"></i>
-                Point camera at QR code
+            {/* Modern Scanner Container */}
+            <div className="mb-4">
+              <div 
+                id="qr-reader" 
+                ref={scannerRef} 
+                className="w-full mx-auto rounded-3xl overflow-hidden shadow-2xl border-4"
+                style={{ height: 400, borderColor: '#E5B80B' }}
+              />
+              
+              {/* Modern Scanner Status */}
+              <div className="mt-4 text-center">
+                {isScanning ? (
+                  <div className="inline-flex items-center px-4 py-2 bg-green-100 text-green-700 rounded-full" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                    <i className="fa-solid fa-camera mr-2"></i>
+                    Scanning for QR code...
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-600 rounded-full" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                    <i className="fa-solid fa-pause mr-2"></i>
+                    Scanner ready
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="text-gray-500 font-['Telegraph']">
-                <i className="fa-solid fa-pause mr-2"></i>
-                Scanner ready
+            </div>
+
+            {/* Compact Control Buttons */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {!isScanning ? (
+                <button
+                  onClick={startScanner}
+                  disabled={!cameraPermission}
+                  className="flex items-center justify-center py-2 px-3 rounded-lg font-semibold text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg text-sm"
+                  style={{backgroundColor: '#E5B80B', fontFamily: 'Telegraf, sans-serif'}}
+                  onMouseEnter={(e) => !e.target.disabled && (e.target.style.backgroundColor = '#D4A509')}
+                  onMouseLeave={(e) => !e.target.disabled && (e.target.style.backgroundColor = '#E5B80B')}
+                >
+                  <i className="fa-solid fa-play mr-1 text-xs"></i>
+                  Start Scanner
+                </button>
+              ) : (
+                <button
+                  onClick={stopScanner}
+                  className="flex items-center justify-center py-2 px-3 text-white rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg text-sm"
+                  style={{backgroundColor: '#351E10', fontFamily: 'Telegraf, sans-serif'}}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#2A1A0D'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#351E10'}
+                >
+                  <i className="fa-solid fa-stop mr-1 text-xs"></i>
+                  Stop Scanner
+                </button>
+              )}
+              <button
+                onClick={resetScanner}
+                className="flex items-center justify-center py-2 px-3 text-white rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg text-sm"
+                style={{backgroundColor: '#351E10', fontFamily: 'Telegraf, sans-serif'}}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#2A1A0D'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#351E10'}
+              >
+                <i className="fa-solid fa-refresh mr-1 text-xs"></i>
+                Reset
+              </button>
+            </div>
+
+            {/* Compact Manual Check-In Toggle */}
+            <div className="mb-3">
+              <button
+                onClick={() => setShowManualInput(!showManualInput)}
+                className="w-full py-2 px-3 rounded-lg transition-all duration-200 border-2 shadow-md hover:shadow-lg text-sm"
+                style={{backgroundColor: '#351E10', color: 'white', borderColor: '#351E10', fontFamily: 'Telegraf, sans-serif'}}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#2A1A0D';
+                  e.target.style.borderColor = '#2A1A0D';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = '#351E10';
+                  e.target.style.borderColor = '#351E10';
+                }}
+              >
+                <i className="fa-solid fa-key mr-1 text-xs"></i>
+                {showManualInput ? 'Hide Manual Check-In' : 'Show Manual Check-In'}
+              </button>
+            </div>
+
+            {/* Modern Manual Input Section */}
+            {showManualInput && (
+              <div className="mb-4">
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 border-2 shadow-lg" style={{borderColor: '#351E10'}}>
+                  <h3 className="font-semibold mb-3 flex items-center" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                    <i className="fa-solid fa-key mr-2 text-lg" style={{color: '#E5B80B'}}></i>
+                    Manual Check-In
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Enter visitor ID, token, registration ID, or participant ID..."
+                        value={backupCode}
+                        onChange={(e) => setBackupCode(e.target.value)}
+                        className="w-full px-3 py-2 border-2 rounded-xl focus:outline-none transition-all duration-200 shadow-sm"
+                        style={{fontFamily: 'Telegraf, sans-serif', borderColor: '#351E10', focusBorderColor: '#E5B80B'}}
+                        onKeyPress={(e) => e.key === 'Enter' && handleBackupCode()}
+                      />
+                    </div>
+                    <button
+                      onClick={handleBackupCode}
+                      className="w-full text-white py-2 px-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                      style={{backgroundColor: '#E5B80B', fontFamily: 'Telegraf, sans-serif'}}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#D4A509'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = '#E5B80B'}
+                    >
+                      <i className="fa-solid fa-check mr-2"></i>
+                      Check In Visitor
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
-          </div>
 
-        </div>
-
-        {/* Manual Check-In Toggle Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => setShowManualInput(!showManualInput)}
-            className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-4 rounded-lg transition-colors font-['Telegraph'] border border-gray-300"
-          >
-            <i className="fa-solid fa-key mr-2"></i>
-            {showManualInput ? 'Hide Manual Check-In' : 'Show Manual Check-In'}
-          </button>
-        </div>
-
-        {/* Manual Input Section */}
-        {showManualInput && (
-          <div className="mb-6">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-700 mb-3 font-['Lora']">
-                <i className="fa-solid fa-key mr-2 text-[#AB8841]"></i>
-                Manual Check-In
+            {/* Quick Instructions - Moved up to fill space */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 rounded-xl p-4 shadow-lg" style={{borderColor: '#351E10'}}>
+              <h3 className="font-semibold mb-3 flex items-center text-sm" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                <i className="fa-solid fa-info-circle mr-2" style={{color: '#E5B80B'}}></i>
+                Quick Instructions
               </h3>
-              
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Enter visitor ID, token, registration ID, or participant ID..."
-                  value={backupCode}
-                  onChange={(e) => setBackupCode(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent font-['Telegraph']"
-                  onKeyPress={(e) => e.key === 'Enter' && handleBackupCode()}
-                />
-                <button
-                  onClick={handleBackupCode}
-                  className="w-full bg-[#AB8841] text-white py-2 px-4 rounded-lg hover:bg-[#8B6B21] transition-colors font-['Telegraph']"
-                >
-                  <i className="fa-solid fa-check mr-2"></i>
-                  Check In Visitor
-                </button>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0" style={{backgroundColor: '#E5B80B'}}>
+                    <i className="fa-solid fa-camera text-white text-xs"></i>
+                  </div>
+                  <span style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>Point camera at QR code</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0" style={{backgroundColor: '#E5B80B'}}>
+                    <i className="fa-solid fa-key text-white text-xs"></i>
+                  </div>
+                  <span style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>Manual input</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0" style={{backgroundColor: '#E5B80B'}}>
+                    <i className="fa-solid fa-refresh text-white text-xs"></i>
+                  </div>
+                  <span style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>Reset</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0" style={{backgroundColor: '#E5B80B'}}>
+                    <i className="fa-solid fa-lock text-white text-xs"></i>
+                  </div>
+                  <span style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>HTTPS required</span>
+                </div>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Controls */}
-        <div className="flex gap-3 mb-6">
-          {!isScanning ? (
-            <button
-              onClick={startScanner}
-              disabled={!cameraPermission}
-              className="flex-1 bg-[#AB8841] text-white py-3 px-4 rounded-lg hover:bg-[#8B6B21] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-['Telegraph'] font-semibold"
-            >
-              <i className="fa-solid fa-play mr-2"></i>
-              Start Scanner
-            </button>
-          ) : (
-            <button
-              onClick={stopScanner}
-              className="flex-1 bg-red-500 text-white py-3 px-4 rounded-lg hover:bg-red-600 transition-colors font-['Telegraph'] font-semibold"
-            >
-              <i className="fa-solid fa-stop mr-2"></i>
-              Stop Scanner
-            </button>
-          )}
-          <button
-            onClick={resetScanner}
-            className="flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors font-['Telegraph'] font-semibold"
-          >
-            <i className="fa-solid fa-refresh mr-2"></i>
-            Reset
-          </button>
-        </div>
+          {/* Results Section */}
+          <div className="bg-white rounded-2xl shadow-lg p-4 border-2" style={{borderColor: '#351E10'}}>
+              <div className="text-center mb-4">
+                <h2 className="text-xl font-bold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                  Check-In Results
+                </h2>
+                <p className="text-sm text-gray-600" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  View visitor information and status
+                </p>
+              </div>
 
-        {/* Results */}
-        <div className="space-y-4">
-          {scanned && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="font-semibold text-blue-800 mb-2 font-['Lora']">
-                <i className="fa-solid fa-qrcode mr-2"></i>
-                Scanned QR Code:
-              </h3>
-              <div className="text-sm text-blue-700 break-all font-['Telegraph']">{scanned}</div>
-            </div>
-          )}
+
+            {/* Modern Results */}
+            <div className="space-y-3">
           
           {visitor && (
-            <div className={`border rounded-lg p-4 ${
+                <div className={`border-2 rounded-2xl p-6 shadow-lg ${
               visitor.visitorType === 'event_participant' && visitor.status === 'cancelled' 
-                ? 'bg-red-50 border-red-200' 
-                : 'bg-green-50 border-green-200'
+                    ? 'bg-gradient-to-r from-red-50 to-pink-50 border-red-200' 
+                    : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
             }`}>
-              <h3 className={`font-semibold mb-3 font-['Lora'] ${
+                  <h3 className={`font-semibold mb-4 text-lg ${
                 visitor.visitorType === 'event_participant' && visitor.status === 'cancelled'
                   ? 'text-red-800'
                   : 'text-green-800'
-              }`}>
-                <i className={`mr-2 ${
+                  }`} style={{fontFamily: 'Telegraf, sans-serif'}}>
+                    <i className={`mr-3 text-xl ${
                   visitor.visitorType === 'event_participant' && visitor.status === 'cancelled'
                     ? 'fa-solid fa-times-circle text-red-600'
                     : 'fa-solid fa-user-check text-green-600'
@@ -789,128 +872,167 @@ const VisitorScanner = () => {
                 {visitor.visitorType === 'event_participant' 
                   ? (visitor.status === 'cancelled' ? 'Event Registration Cancelled' : 'Event Participant Checked In!')
                   : (visitor.displayType || (visitor.visitorType === 'walkin_visitor' ? 'Walk-in Visitor' : 
-                     visitor.firstName ? 'Group Member' : 'Primary Visitor')) + ' Visited Successfully!'
+                     'Visitor')) + ' Visited Successfully!'
                 }
               </h3>
               
-              {/* Event Participant Specific Information */}
+                  {/* Modern Event Participant Information */}
               {visitor.visitorType === 'event_participant' && (
-                <div className="mb-4 p-3 bg-white rounded border">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium text-gray-700">Event:</span>
-                    <span className="text-gray-600 font-semibold">{visitor.event_title}</span>
+                    <div className="mb-6 p-4 bg-white rounded-2xl border border-gray-200 shadow-sm">
+                      <div className="grid grid-cols-1 gap-3">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-700" style={{fontFamily: 'Telegraf, sans-serif'}}>Event:</span>
+                          <span className="text-gray-600 font-semibold" style={{fontFamily: 'Telegraf, sans-serif'}}>{visitor.event_title}</span>
                   </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium text-gray-700">Status:</span>
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-700" style={{fontFamily: 'Telegraf, sans-serif'}}>Status:</span>
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                       visitor.status === 'cancelled' 
                         ? 'bg-red-100 text-red-800' 
                         : 'bg-green-100 text-green-800'
-                    }`}>
+                          }`} style={{fontFamily: 'Telegraf, sans-serif'}}>
                       {visitor.status === 'cancelled' ? 'Cancelled' : 'Attended'}
                     </span>
                   </div>
                   {visitor.event_status && (
                     <div className="flex justify-between items-center">
-                      <span className="font-medium text-gray-700">Event Status:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            <span className="font-medium text-gray-700" style={{fontFamily: 'Telegraf, sans-serif'}}>Event Status:</span>
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                         visitor.event_status === 'ended' 
                           ? 'bg-red-100 text-red-800'
                           : visitor.event_status === 'in_progress'
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-blue-100 text-blue-800'
-                      }`}>
+                            }`} style={{fontFamily: 'Telegraf, sans-serif'}}>
                         {visitor.event_status === 'ended' ? 'Event Ended' :
                          visitor.event_status === 'in_progress' ? 'Event In Progress' : 'Event Not Started'}
                       </span>
                     </div>
                   )}
+                      </div>
                 </div>
               )}
               
-              <div className="space-y-2 text-sm font-['Telegraph']">
-                <div className="flex justify-between">
+                  <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+                    <div className="grid grid-cols-1 gap-3 text-sm" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                      <div className="flex justify-between items-center">
                   <span className="font-medium text-gray-700">Name:</span>
                   <span className="text-gray-600">
-                    {visitor.firstName || visitor.first_name} {visitor.lastName || visitor.last_name}
+                    {(() => {
+                      const firstName = visitor.firstName || visitor.first_name || '';
+                      const lastName = visitor.lastName || visitor.last_name || '';
+                      const fullName = `${firstName} ${lastName}`.trim();
+                      return fullName || 'Not provided';
+                    })()}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                      <div className="flex justify-between items-center">
                   <span className="font-medium text-gray-700">Email:</span>
-                  <span className="text-gray-600">{visitor.email}</span>
+                  <span className="text-gray-600">{visitor.email || 'Not provided'}</span>
                 </div>
-                <div className="flex justify-between">
+                      <div className="flex justify-between items-center">
                   <span className="font-medium text-gray-700">Gender:</span>
-                  <span className="text-gray-600">{visitor.gender}</span>
+                  <span className="text-gray-600">{visitor.gender || 'Not specified'}</span>
                 </div>
-                <div className="flex justify-between">
+                      <div className="flex justify-between items-center">
                   <span className="font-medium text-gray-700">Visitor Type:</span>
                   <span className="text-gray-600">
-                    {visitor.visitorType === 'event_participant' ? 'Event Participant' : (visitor.visitorType || 'Not specified')}
+                    {(() => {
+                      if (visitor.visitorType === 'event_participant') return 'Event Participant';
+                      if (visitor.visitorType === 'walkin_visitor') return 'Walk-in Visitor';
+                      if (visitor.visitorType === 'group_walkin_leader') return 'Group Walk-in Leader';
+                      if (visitor.visitorType === 'group_walkin_member') return 'Group Walk-in Member';
+                      if (visitor.displayType) return visitor.displayType;
+                      return visitor.visitorType || 'Additional Visitor';
+                    })()}
                   </span>
                 </div>
-                {visitor.address && (
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Address:</span>
-                    <span className="text-gray-600">{visitor.address}</span>
-                  </div>
-                )}
-                {visitor.totalVisitors && visitor.totalVisitors > 1 && (
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Total Visitors:</span>
-                    <span className="text-gray-600">{visitor.totalVisitors}</span>
-                  </div>
-                )}
-                {(visitor.visitDate || visitor.visit_date) && (
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Visit Date:</span>
-                    <span className="text-gray-600">{visitor.visitDate || visitor.visit_date}</span>
-                  </div>
-                )}
-                {(visitor.visitTime || visitor.visit_time) && (
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Time Slot:</span>
-                    <span className="text-gray-600">{visitor.visitTime || visitor.visit_time}</span>
-                  </div>
-                )}
-                {visitor.institution && visitor.institution !== 'N/A' && (
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Institution:</span>
-                    <span className="text-gray-600">{visitor.institution}</span>
-                  </div>
-                )}
+                      <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700">Address:</span>
+                  <span className="text-gray-600">{visitor.address || 'Not provided'}</span>
+                </div>
+                      <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700">Visit Date:</span>
+                  <span className="text-gray-600">
+                    {(() => {
+                      const visitDate = visitor.visitDate || visitor.visit_date;
+                      if (!visitDate) return 'Not specified';
+                      try {
+                        const date = new Date(visitDate);
+                        if (isNaN(date.getTime())) return 'Invalid Date';
+                        return date.toLocaleDateString();
+                      } catch (error) {
+                        return 'Invalid Date';
+                      }
+                    })()}
+                  </span>
+                </div>
+                      <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700">Time Slot:</span>
+                  <span className="text-gray-600">{visitor.visitTime || visitor.visit_time || 'Not specified'}</span>
+                </div>
+                      <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700">Institution:</span>
+                  <span className="text-gray-600">{visitor.institution || 'Not specified'}</span>
+                </div>
+                      <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700">Purpose:</span>
+                  <span className="text-gray-600">{visitor.purpose || 'Not specified'}</span>
+                </div>
+                      <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700">Check-in Time:</span>
+                  <span className="text-gray-600">
+                    {(() => {
+                      const checkinTime = visitor.checkin_time || visitor.scanTime;
+                      if (!checkinTime) {
+                        return 'Not set';
+                      }
+                      try {
+                        const date = new Date(checkinTime);
+                        if (isNaN(date.getTime())) {
+                          return 'Invalid Date';
+                        }
+                        return date.toLocaleString();
+                      } catch (error) {
+                        return 'Invalid Date';
+                      }
+                    })()}
+                  </span>
+                </div>
                 {visitor.groupLeader && visitor.groupLeader !== 'N/A' && (
-                  <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                     <span className="font-medium text-gray-700">Group Leader:</span>
                     <span className="text-gray-600">{visitor.groupLeader}</span>
                   </div>
                 )}
                 {visitor.detailsCompleted !== undefined && (
-                  <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                     <span className="font-medium text-gray-700">Details Completed:</span>
                     <span className="text-gray-600">{visitor.detailsCompleted ? 'Yes' : 'No'}</span>
                   </div>
                 )}
                 {visitor.bookingType && (
-                  <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                     <span className="font-medium text-gray-700">Type:</span>
                     <span className="text-gray-600">{visitor.bookingType}</span>
                   </div>
                 )}
+                    </div>
+                  </div>
                 {visitor.allVisitors && visitor.allVisitors.length > 1 && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <h4 className="font-semibold text-gray-800 mb-2 font-['Lora']">
-                      <i className="fa-solid fa-users mr-2"></i>
-                      All Visitors in This Booking:
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <h4 className="font-semibold text-gray-800 mb-4 flex items-center" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                        <i className="fa-solid fa-users mr-3 text-lg" style={{color: '#E5B80B'}}></i>
+                        All Visitors in This Booking
                     </h4>
-                    <div className="space-y-2">
+                      <div className="space-y-3">
                       {visitor.allVisitors.map((v, index) => (
-                        <div key={index} className="bg-gray-50 p-2 rounded text-sm font-['Telegraph']">
+                          <div key={index} className="bg-gradient-to-r from-gray-50 to-gray-100 p-3 rounded-2xl border border-gray-200" style={{fontFamily: 'Telegraf, sans-serif'}}>
                           <div className="flex justify-between items-center">
                             <span className="font-medium text-gray-700">
                               {v.firstName} {v.lastName}
                               {v.isPrimary && (
-                                <span className="ml-2 bg-blue-600 text-white px-2 py-1 rounded text-xs">Primary</span>
+                                  <span className="ml-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs">Primary</span>
                               )}
                             </span>
                             <span className="text-gray-600">{v.email}</span>
@@ -920,92 +1042,48 @@ const VisitorScanner = () => {
                     </div>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-700">Check-in Time:</span>
-                  <span className="text-gray-600">
-                    {(() => {
-                      const checkinTime = visitor.checkin_time || visitor.scanTime;
-                      console.log('🔍 Debug checkin_time:', {
-                        checkin_time: visitor.checkin_time,
-                        scanTime: visitor.scanTime,
-                        combined: checkinTime,
-                        type: typeof checkinTime
-                      });
-                      
-                      if (!checkinTime) {
-                        return 'Not set';
-                      }
-                      
-                      try {
-                        const date = new Date(checkinTime);
-                        if (isNaN(date.getTime())) {
-                          console.error('❌ Invalid date:', checkinTime);
-                          return 'Invalid Date';
-                        }
-                        return date.toLocaleString();
-                      } catch (error) {
-                        console.error('❌ Date parsing error:', error, 'for value:', checkinTime);
-                        return 'Invalid Date';
-                      }
-                    })()}
-                  </span>
-                </div>
-              </div>
             </div>
           )}
           
-          {/* Success Message */}
+              {/* Modern Success Message */}
           {scanned && !error && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-              <h3 className="font-semibold text-green-800 mb-2 font-['Lora']">
-                <i className="fa-solid fa-check-circle mr-2"></i>
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 shadow-lg">
+                  <h3 className="font-semibold text-green-800 mb-3 flex items-center" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                    <i className="fa-solid fa-check-circle mr-3 text-green-600"></i>
                 QR Code Scanned Successfully!
               </h3>
-              <div className="text-sm text-green-700 font-['Telegraph']">
+                  <div className="text-sm text-green-700" style={{fontFamily: 'Telegraf, sans-serif'}}>
                 Processing visitor information...
               </div>
             </div>
           )}
 
-          {/* Error Message */}
+              {/* Modern Error Message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <h3 className="font-semibold text-red-800 mb-2 font-['Lora']">
-                <i className="fa-solid fa-exclamation-triangle mr-2"></i>
-                Check-in Error:
+                <div className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 rounded-2xl p-6 shadow-lg">
+                  <h3 className="font-semibold text-red-800 mb-3 flex items-center" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                    <i className="fa-solid fa-exclamation-triangle mr-3 text-red-600"></i>
+                    Check-in Error
               </h3>
-              <div className="text-sm text-red-700 font-['Telegraph']">{error}</div>
+                  <div className="text-sm text-red-700" style={{fontFamily: 'Telegraf, sans-serif'}}>{error}</div>
             </div>
           )}
 
-          {/* Success Check-in Message */}
-          {visitor && !error && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-              <h3 className="font-semibold text-green-800 mb-2 font-['Lora']">
-                <i className="fa-solid fa-check-circle mr-2"></i>
-                Check-in Successful!
-              </h3>
-              <div className="text-sm text-green-700 font-['Telegraph']">
-                Visitor has been checked in successfully.
-              </div>
+              {/* Modern Success Check-in Message */}
+              {visitor && !error && (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4 shadow-lg">
+                  <h3 className="font-semibold text-green-800 mb-2 flex items-center text-sm" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                    <i className="fa-solid fa-check-circle mr-2 text-green-600"></i>
+                    Check-in Successful
+                  </h3>
+                  <div className="text-xs text-green-700" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                    Visitor has been checked in successfully.
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-
-        {/* Quick Instructions */}
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="font-semibold text-blue-800 mb-2 font-['Lora']">
-            <i className="fa-solid fa-info-circle mr-2"></i>
-            Quick Instructions:
-          </h3>
-          <ul className="text-sm text-blue-700 space-y-1 font-['Telegraph']">
-            <li>• <strong>Point camera at QR code</strong> - Scanner will automatically detect and process</li>
-            <li>• <strong>Manual input</strong> - Use the backup input field if camera fails</li>
-            <li>• <strong>Reset</strong> - Click reset to scan another visitor</li>
-            <li>• <strong>HTTPS required</strong> - Camera access needs secure connection</li>
-          </ul>
-        </div>
-
 
       </div>
     </div>

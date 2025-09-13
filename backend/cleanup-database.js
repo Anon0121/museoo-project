@@ -1,3 +1,4 @@
+nationality because i replace it with 
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 

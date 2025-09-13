@@ -18,7 +18,9 @@ const GroupWalkInMemberForm = () => {
     lastName: "",
     gender: "",
     address: "",
-    visitorType: ""
+    visitorType: "",
+    institution: "",
+    purpose: "educational"
   });
 
   useEffect(() => {
@@ -44,10 +46,13 @@ const GroupWalkInMemberForm = () => {
           }
           
           setTokenInfo(tokenData);
-          // Pre-fill email from token info
+          // Pre-fill email and group leader info from token info
           setVisitorInfo(prev => ({
             ...prev,
-            email: tokenData.email
+            email: tokenData.email,
+            // Pre-fill with group leader's information
+            institution: tokenData.institution || "",
+            purpose: tokenData.purpose || ""
           }));
         } else {
           setError("Invalid or expired token");
@@ -82,7 +87,9 @@ const GroupWalkInMemberForm = () => {
         lastName: visitorInfo.lastName,
         gender: visitorInfo.gender,
         address: visitorInfo.address,
-        visitorType: visitorInfo.visitorType
+        visitorType: visitorInfo.visitorType,
+        institution: visitorInfo.institution,
+        purpose: visitorInfo.purpose
       });
 
       if (response.data.success) {
@@ -102,15 +109,48 @@ const GroupWalkInMemberForm = () => {
     }
   };
 
-  if (loading && !success) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-cover bg-center flex items-center justify-center" style={{
+        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${citymus})`
+      }}>
+        <div className="bg-white rounded-lg p-8 text-center">
+          <div className="text-6xl mb-4">⏳</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Loading...</h2>
+          <p className="text-gray-600">Please wait while we load your information.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    const isExpired = error.includes('expired') || error.includes('cancelled');
     return (
       <div className="min-h-screen bg-cover bg-center" style={{
         backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${citymus})`
       }}>
         <div className="flex items-center justify-center min-h-screen">
-          <div className="bg-white rounded-lg p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading your group member information...</p>
+          <div className="bg-white rounded-lg p-8 text-center max-w-md mx-4">
+            <div className={`text-6xl mb-4 ${isExpired ? 'text-orange-500' : 'text-red-500'}`}>
+              {isExpired ? '⏰' : '❌'}
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">
+              {isExpired ? 'Link Expired' : 'Invalid Link'}
+            </h2>
+            <p className="text-gray-600 mb-4">{error}</p>
+            {isExpired && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                <p className="text-orange-700 text-sm">
+                  <strong>Note:</strong> Your group walk-in member link has expired. Please contact the museum for assistance.
+                </p>
+              </div>
+            )}
+            <button
+              onClick={() => navigate("/")}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg"
+            >
+              Go to Homepage
+            </button>
           </div>
         </div>
       </div>
@@ -119,50 +159,28 @@ const GroupWalkInMemberForm = () => {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-cover bg-center" style={{
+      <div className="min-h-screen bg-cover bg-center flex items-center justify-center" style={{
         backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${citymus})`
       }}>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="bg-white rounded-lg p-8 text-center max-w-md mx-4">
-            <div className="text-green-500 text-6xl mb-4">✅</div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Group Member Registration Complete!</h2>
-            <p className="text-gray-600 mb-6">
-              Your group walk-in member registration has been completed successfully! 
-              You can now use your QR code for check-in.
-            </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <h3 className="font-semibold text-blue-800 mb-2">What happens next?</h3>
-              <ul className="text-sm text-blue-700 space-y-1 text-left">
-                <li>• Your QR code is ready for check-in</li>
-                <li>• Institution and purpose are set by your group leader</li>
-                <li>• Present your QR code at the museum entrance</li>
-                <li>• Enjoy your museum visit!</li>
-              </ul>
-            </div>
-            <p className="text-sm text-gray-500">Redirecting to homepage in 3 seconds...</p>
+        <div className="bg-white rounded-lg p-8 text-center max-w-md mx-4">
+          <div className="text-6xl mb-4 text-green-500">✅</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Member Registration Completed!</h2>
+          <p className="text-gray-600 mb-4">
+            Your group walk-in member registration has been completed successfully! 
+            Your QR code has been generated and sent to your email.
+          </p>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                          <p className="text-green-700 text-sm">
+                <strong>What You Inherited:</strong> Institution and purpose from your group leader<br />
+                <strong>Next Steps:</strong> Check your email for your QR code and bring it for check-in
+              </p>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-cover bg-center" style={{
-        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${citymus})`
-      }}>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="bg-white rounded-lg p-8 text-center max-w-md mx-4">
-            <div className="text-red-500 text-6xl mb-4">❌</div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Error</h2>
-            <p className="text-gray-600 mb-6">{error}</p>
-            <button
-              onClick={() => window.location.href = "/"}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
-            >
-              Go to Homepage
-            </button>
-          </div>
+          <button
+            onClick={() => navigate("/")}
+            className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg"
+          >
+            Return to Homepage
+          </button>
         </div>
       </div>
     );
@@ -175,28 +193,22 @@ const GroupWalkInMemberForm = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <img src={logo} alt="Museum Logo" className="h-16" />
-          </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
-            Group Walk-In Member Registration
-          </h1>
-          <p className="text-white text-lg mb-4">
-            Complete your basic details to finalize your registration
-          </p>
+          <img src={logo} alt="MuseoSmart Logo" className="h-16 mx-auto mb-4" />
+          <h1 className="text-3xl font-bold text-white mb-2">Group Member Registration</h1>
+          <p className="text-white/80">Complete your personal details</p>
           {tokenInfo && (
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 max-w-md mx-auto">
+            <div className="mt-4 p-3 bg-white/10 rounded-lg">
+              <p className="text-white text-sm">
+                <strong>Group Leader:</strong> {tokenInfo.groupLeaderName || 'Group Leader'}
+              </p>
               <p className="text-white text-sm">
                 <strong>Visit Date:</strong> {tokenInfo.visitDate} | <strong>Time:</strong> {tokenInfo.visitTime}
               </p>
-              <p className="text-white text-sm mt-1">
-                <strong>Group Leader:</strong> {tokenInfo.groupLeader}
+              <p className="text-white text-sm">
+                <strong>Institution:</strong> {tokenInfo.groupLeaderInstitution || 'Not specified'} (inherited)
               </p>
-              <p className="text-white text-sm mt-1">
-                <strong>Institution:</strong> {tokenInfo.institution}
-              </p>
-              <p className="text-white text-sm mt-1">
-                <strong>Purpose:</strong> {tokenInfo.purpose}
+              <p className="text-white text-sm">
+                <strong>Purpose:</strong> {tokenInfo.groupLeaderPurpose || 'Not specified'} (inherited)
               </p>
             </div>
           )}
@@ -206,162 +218,156 @@ const GroupWalkInMemberForm = () => {
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-6 md:p-8">
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-red-700">{error}</p>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* First Name */}
+            <form onSubmit={handleSubmit}>
+              {/* Personal Information */}
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    First Name *
-                  </label>
+                  <label className="block text-[#2e2b41] font-semibold mb-2">First Name *</label>
                   <input
                     type="text"
                     name="firstName"
                     value={visitorInfo.firstName}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                    placeholder="Enter your first name"
                   />
                 </div>
-
-                {/* Last Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Last Name *
-                  </label>
+                  <label className="block text-[#2e2b41] font-semibold mb-2">Last Name *</label>
                   <input
                     type="text"
                     name="lastName"
                     value={visitorInfo.lastName}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                    placeholder="Enter your last name"
                   />
                 </div>
+              </div>
 
-                {/* Gender Radio Buttons */}
+              {/* Gender and Visitor Type */}
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Gender *
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { value: "male", label: "Male" },
-                      { value: "female", label: "Female" },
-                      { value: "lgbtq", label: "LGBTQ+" }
-                    ].map((option) => (
-                      <label key={option.value} className="relative flex items-center cursor-pointer group">
-                        <input
-                          type="radio"
-                          name="gender"
-                          value={option.value}
-                          checked={visitorInfo.gender === option.value}
-                          onChange={handleInputChange}
-                          required
-                          className="sr-only peer"
-                        />
-                        <div className="w-5 h-5 border-2 border-gray-300 rounded-full peer-checked:border-blue-500 peer-checked:bg-blue-500 peer-focus:ring-2 peer-focus:ring-blue-200 transition-all duration-200 group-hover:border-blue-400">
-                          <div className="w-2 h-2 bg-white rounded-full m-auto mt-1.5 peer-checked:opacity-100 opacity-0 transition-opacity duration-200"></div>
-                        </div>
-                        <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors duration-200">
-                          {option.label}
-                        </span>
-                      </label>
-                    ))}
+                  <label className="block text-[#2e2b41] font-semibold mb-3">Gender *</label>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="gender"
+                        value="male"
+                        checked={visitorInfo.gender === "male"}
+                        onChange={handleInputChange}
+                        required
+                        className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
+                      />
+                      <span className="text-sm font-medium">Male</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="gender"
+                        value="female"
+                        checked={visitorInfo.gender === "female"}
+                        onChange={handleInputChange}
+                        required
+                        className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
+                      />
+                      <span className="text-sm font-medium">Female</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="gender"
+                        value="lgbtq"
+                        checked={visitorInfo.gender === "lgbtq"}
+                        onChange={handleInputChange}
+                        required
+                        className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
+                      />
+                      <span className="text-sm font-medium">LGBTQ+</span>
+                    </label>
                   </div>
                 </div>
-
-                {/* Visitor Type Radio Buttons */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Visitor Type *
-                  </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { value: "Local", label: "Local" },
-                      { value: "Foreign", label: "Foreign" }
-                    ].map((option) => (
-                      <label key={option.value} className="relative flex items-center cursor-pointer group">
-                        <input
-                          type="radio"
-                          name="visitorType"
-                          value={option.value}
-                          checked={visitorInfo.visitorType === option.value}
-                          onChange={handleInputChange}
-                          required
-                          className="sr-only peer"
-                        />
-                        <div className="w-5 h-5 border-2 border-gray-300 rounded-full peer-checked:border-blue-500 peer-checked:bg-blue-500 peer-focus:ring-2 peer-focus:ring-blue-200 transition-all duration-200 group-hover:border-blue-400">
-                          <div className="w-2 h-2 bg-white rounded-full m-auto mt-1.5 peer-checked:opacity-100 opacity-0 transition-opacity duration-200"></div>
-                        </div>
-                        <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors duration-200">
-                          {option.label}
-                        </span>
-                      </label>
-                    ))}
+                  <label className="block text-[#2e2b41] font-semibold mb-3">Visitor Type *</label>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="visitorType"
+                        value="Local"
+                        checked={visitorInfo.visitorType === "Local"}
+                        onChange={handleInputChange}
+                        required
+                        className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
+                      />
+                      <span className="text-sm font-medium">Local</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="visitorType"
+                        value="Foreign"
+                        checked={visitorInfo.visitorType === "Foreign"}
+                        onChange={handleInputChange}
+                        required
+                        className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
+                      />
+                      <span className="text-sm font-medium">Foreign</span>
+                    </label>
                   </div>
                 </div>
+              </div>
 
-                {/* Email (read-only) */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={visitorInfo.email}
-                    disabled
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
-                </div>
+              {/* Email Field (Read-only) */}
+              <div className="mb-6">
+                <label className="block text-[#2e2b41] font-semibold mb-2">Email Address</label>
+                <input
+                  type="email"
+                  value={visitorInfo.email || ""}
+                  disabled
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                />
+                <p className="text-sm text-gray-500 mt-1">Email cannot be changed</p>
+              </div>
 
-                {/* Address */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Address *
-                  </label>
-                  <textarea
-                    name="address"
-                    value={visitorInfo.address}
-                    onChange={handleInputChange}
-                    required
-                    rows={3}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
+              {/* Address */}
+              <div className="mb-6">
+                <label className="block text-[#2e2b41] font-semibold mb-2">Address *</label>
+                <input
+                  type="text"
+                  name="address"
+                  value={visitorInfo.address}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                  placeholder="Enter your complete address"
+                />
+              </div>
 
-                {/* Institution (read-only, inherited from group leader) */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Institution/Organization
-                  </label>
-                  <input
-                    type="text"
-                    value={tokenInfo?.institution || 'Not specified'}
-                    disabled
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Set by your group leader</p>
+              {/* Inherited Information Display */}
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="text-lg font-semibold text-[#2e2b41] mb-2">Inherited from Group Leader</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[#2e2b41] font-medium mb-1">Institution/Organization</label>
+                    <p className="text-gray-700 font-semibold">{visitorInfo.institution || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-[#2e2b41] font-medium mb-1">Purpose of Visit</label>
+                    <p className="text-gray-700 font-semibold">{visitorInfo.purpose || 'Not specified'}</p>
+                  </div>
                 </div>
-
-                {/* Purpose (read-only, inherited from group leader) */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Purpose of Visit
-                  </label>
-                  <input
-                    type="text"
-                    value={tokenInfo?.purpose || 'Educational'}
-                    disabled
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Set by your group leader</p>
-                </div>
+                <p className="text-sm text-blue-600 mt-2">
+                  <strong>Note:</strong> These details are inherited from your group leader and cannot be changed.
+                </p>
               </div>
 
               {/* Submit Button */}
@@ -369,22 +375,29 @@ const GroupWalkInMemberForm = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200"
+                  className="bg-[#AB8841] hover:bg-[#8B6B21] text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200 disabled:opacity-50"
                 >
-                  {loading ? "Saving..." : "Complete Member Registration"}
+                  {loading ? (
+                    <span>
+                      <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                      Completing Registration...
+                    </span>
+                  ) : (
+                    "Complete Member Registration"
+                  )}
                 </button>
               </div>
             </form>
 
-            {/* Info Box */}
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="font-semibold text-blue-800 mb-2">What happens next?</h3>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li>• Your basic details will be saved</li>
+            {/* What happens next section */}
+            <div className="mt-8 p-4 bg-blue-50 rounded-lg">
+              <h3 className="text-lg font-semibold text-[#2e2b41] mb-2">What happens next?</h3>
+              <ul className="text-sm text-gray-700 space-y-1">
+                <li>• Your QR code will be generated immediately and sent to your email</li>
                 <li>• Institution and purpose are inherited from your group leader</li>
-                <li>• Your QR code is already ready for check-in</li>
-                <li>• Present your QR code at the museum entrance</li>
-                <li>• Enjoy your museum visit!</li>
+                <li>• Check your email inbox for the QR code attachment</li>
+                <li>• Present the QR code at the museum entrance for check-in</li>
+                <li>• Enjoy your group museum visit!</li>
               </ul>
             </div>
           </div>

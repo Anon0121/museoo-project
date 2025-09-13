@@ -434,7 +434,7 @@ function generateHTMLReport(report) {
                     <th>Visitor ID</th>
                     <th>Name</th>
                     <th>Gender</th>
-                    <th>Nationality</th>
+                    <th>Visitor Type</th>
                     <th>Email</th>
                     <th>Purpose</th>
                     <th>Entry Date</th>
@@ -449,7 +449,7 @@ function generateHTMLReport(report) {
                         <td>${visitor.visitor_id}</td>
                         <td><strong>${visitor.first_name} ${visitor.last_name}</strong></td>
                         <td>${visitor.gender}</td>
-                        <td>${visitor.nationality}</td>
+                        <td>${visitor.visitor_type}</td>
                         <td>${visitor.email}</td>
                         <td>${visitor.purpose}</td>
                         <td>${new Date(visitor.visit_date).toLocaleDateString()}</td>
@@ -523,7 +523,7 @@ async function generateVisitorAnalytics(startDate, endDate) {
       v.first_name,
       v.last_name,
       v.gender,
-      v.nationality,
+      v.visitor_type,
       v.email,
       v.address,
       v.purpose,
@@ -550,7 +550,7 @@ async function generateVisitorAnalytics(startDate, endDate) {
         v.first_name,
         v.last_name,
         v.gender,
-        v.nationality,
+        v.visitor_type,
         v.email,
         v.address,
         v.purpose,
@@ -572,13 +572,13 @@ async function generateVisitorAnalytics(startDate, endDate) {
   // Get demographics based on ACTUAL CHECK-IN TIME
   let [demographics] = await db.query(`
     SELECT 
-      v.nationality,
+      v.visitor_type,
       COUNT(*) as count
     FROM visitors v
     LEFT JOIN bookings b ON v.booking_id = b.booking_id
     WHERE b.checkin_time BETWEEN ? AND ? 
     AND b.status = 'checked-in'
-    GROUP BY v.nationality
+    GROUP BY v.visitor_type
     ORDER BY count DESC
     LIMIT 10
   `, [startDate, endDate]);
@@ -587,12 +587,12 @@ async function generateVisitorAnalytics(startDate, endDate) {
   if (demographics.length === 0) {
     [demographics] = await db.query(`
       SELECT 
-        v.nationality,
+        v.visitor_type,
         COUNT(*) as count
       FROM visitors v
       LEFT JOIN bookings b ON v.booking_id = b.booking_id
       WHERE b.status = 'checked-in'
-      GROUP BY v.nationality
+      GROUP BY v.visitor_type
       ORDER BY count DESC
       LIMIT 10
     `);
@@ -659,7 +659,7 @@ async function generateVisitorAnalytics(startDate, endDate) {
       visitors: v.daily_visitors
     })),
     demographics: demographics.map(d => ({
-      nationality: d.nationality,
+              visitor_type: d.visitor_type,
       count: d.count
     })),
     timeSlots: timeSlots.map(t => ({
@@ -1149,7 +1149,7 @@ function generateReportContent(data, insights, includeCharts, includePredictions
                 <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Visitor ID</th>
                 <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Name</th>
                 <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Gender</th>
-                <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Nationality</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Visitor Type</th>
                 <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Email</th>
                 <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Address</th>
                 <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Purpose</th>
@@ -1168,7 +1168,7 @@ function generateReportContent(data, insights, includeCharts, includePredictions
                   <td style="padding: 8px; border: 1px solid #ddd;">${visitor.visitor_id}</td>
                   <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${visitor.first_name} ${visitor.last_name}</td>
                   <td style="padding: 8px; border: 1px solid #ddd;">${visitor.gender}</td>
-                  <td style="padding: 8px; border: 1px solid #ddd;">${visitor.nationality}</td>
+                                          <td style="padding: 8px; border: 1px solid #ddd;">${visitor.visitor_type}</td>
                   <td style="padding: 8px; border: 1px solid #ddd;">${visitor.email}</td>
                   <td style="padding: 8px; border: 1px solid #ddd;">${visitor.address}</td>
                   <td style="padding: 8px; border: 1px solid #ddd;">${visitor.purpose}</td>
@@ -1214,7 +1214,7 @@ function generateReportContent(data, insights, includeCharts, includePredictions
 
           <!-- Demographics Chart -->
           <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
-            <h3 style="margin-top: 0; color: #333;">Nationality Distribution</h3>
+                                <h3 style="margin-top: 0; color: #333;">Visitor Type Distribution</h3>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               ${data.chartData.demographics.map(demo => {
                 const total = data.chartData.demographics.reduce((sum, d) => sum + d.count, 0);
@@ -1222,7 +1222,7 @@ function generateReportContent(data, insights, includeCharts, includePredictions
                 return `
                   <div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                      <span style="font-size: 12px;">${demo.nationality}</span>
+                      <span style="font-size: 12px;">${demo.visitor_type}</span>
                       <span style="font-size: 12px;">${demo.count} (${percentage.toFixed(1)}%)</span>
                     </div>
                     <div style="width: 100%; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden;">

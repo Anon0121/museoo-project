@@ -13,12 +13,13 @@ const AdditionalVisitorForm = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [tokenInfo, setTokenInfo] = useState(null);
+  const [newQRCode, setNewQRCode] = useState(null);
   const [visitorInfo, setVisitorInfo] = useState({
     firstName: "",
     lastName: "",
     gender: "", // Remove default - force user to choose
     address: "",
-    nationality: "", // Remove default - force user to choose
+    visitorType: "", // Remove default - force user to choose
     institution: "",
     purpose: "educational"
   });
@@ -41,6 +42,13 @@ const AdditionalVisitorForm = () => {
           // Check if link is expired
           if (tokenData.linkExpired) {
             setError("This link has expired. Please contact the museum for assistance.");
+            setLoading(false);
+            return;
+          }
+          
+          // Check if form is already completed
+          if (tokenData.status === 'completed') {
+            setError("This form has already been completed and cannot be used again. Please use your QR code for check-in.");
             setLoading(false);
             return;
           }
@@ -84,16 +92,14 @@ const AdditionalVisitorForm = () => {
         lastName: visitorInfo.lastName,
         gender: visitorInfo.gender,
         address: visitorInfo.address,
-        nationality: visitorInfo.nationality
+        visitorType: visitorInfo.visitorType
         // institution and purpose are automatically set from primary visitor
       });
 
       if (response.data.success) {
+        setNewQRCode(response.data.qrCodeDataUrl);
         setSuccess(true);
-        // Redirect after 3 seconds
-        setTimeout(() => {
-          navigate("/");
-        }, 3000);
+        // Don't redirect - show the new QR code
       } else {
         setError(response.data.error || "Failed to update information");
       }
@@ -126,15 +132,34 @@ const AdditionalVisitorForm = () => {
         backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${citymus})`
       }}>
         <div className="flex items-center justify-center min-h-screen">
-          <div className="bg-white rounded-lg p-8 text-center max-w-md mx-4">
+          <div className="bg-white rounded-lg p-8 text-center max-w-2xl mx-4">
             <div className="text-green-500 text-6xl mb-4">✅</div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Information Completed!</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Form Completed Successfully!</h2>
             <p className="text-gray-600 mb-4">
-              Your details have been successfully saved. Please keep your QR code safe for check-in on your visit day.
+              Your details have been saved and embedded in your existing QR code. This form link has been deactivated and cannot be used again.
             </p>
-            <p className="text-sm text-gray-500">
-              Redirecting to homepage in 3 seconds...
-            </p>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
+              <p className="text-sm text-blue-800">
+                <strong>Important:</strong> The form link you used is now permanently disabled. 
+                Use your existing QR code (the one sent via email) for check-in.
+              </p>
+            </div>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-4 mb-6">
+              <h4 className="font-semibold text-yellow-800 mb-2">🔒 One-Time Use Form</h4>
+              <p className="text-sm text-yellow-700">
+                This form can only be submitted once. After submission, the link becomes inactive 
+                and all visitor details are securely stored in the QR code.
+              </p>
+            </div>
+            
+            <button
+              onClick={() => navigate("/")}
+              className="bg-[#AB8841] hover:bg-[#8B6B21] text-white py-3 px-6 rounded-lg font-semibold transition-colors"
+            >
+              Return to Homepage
+            </button>
           </div>
         </div>
       </div>
@@ -204,6 +229,23 @@ const AdditionalVisitorForm = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Important Notice */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <i className="fa-solid fa-info-circle text-blue-400 text-lg mt-0.5"></i>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800">Important Information</h3>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <p>• Use the QR code that was sent to your email</p>
+                      <p>• After completing this form, your QR code will be updated with your details</p>
+                      <p>• Bring the same QR code (from email) for check-in on your visit day</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* First Name */}
                 <div>
@@ -335,11 +377,11 @@ const AdditionalVisitorForm = () => {
            </label>
            <input
              type="text"
-             value={tokenInfo?.primaryInstitution || tokenInfo?.primaryPurpose || 'Educational'}
+             value={tokenInfo?.primaryInstitution || 'Not specified'}
              disabled
-             className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+             className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-blue-50 text-blue-700 font-medium"
            />
-           <p className="text-xs text-gray-500 mt-1">Same as primary visitor's institution</p>
+           <p className="text-xs text-blue-600 mt-1">✅ Inherited from primary visitor (group leader)</p>
          </div>
 
                                           {/* Purpose (read-only, same as primary visitor) */}
@@ -349,11 +391,11 @@ const AdditionalVisitorForm = () => {
            </label>
            <input
              type="text"
-             value={tokenInfo?.primaryPurpose || 'Educational'}
+             value={tokenInfo?.primaryPurpose || 'Not specified'}
              disabled
-             className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+             className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-blue-50 text-blue-700 font-medium"
            />
-           <p className="text-xs text-gray-500 mt-1">Same as primary visitor's purpose</p>
+           <p className="text-xs text-blue-600 mt-1">✅ Inherited from primary visitor (group leader)</p>
          </div>
               </div>
 

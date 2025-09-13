@@ -6,6 +6,18 @@ const fs = require('fs');
 const router = express.Router();
 const { logActivity } = require('../utils/activityLogger');
 
+// Session-based authentication middleware
+const isAuthenticated = (req, res, next) => {
+  if (req.session && req.session.user) {
+    req.user = req.session.user;
+    return next();
+  }
+  return res.status(401).json({ 
+    success: false, 
+    message: 'Not authenticated' 
+  });
+};
+
 // Set up Multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -21,7 +33,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // POST /api/archives - Upload new archive (admin only)
-router.post('/', upload.single('file'), async (req, res) => {
+router.post('/', isAuthenticated, upload.single('file'), async (req, res) => {
   const { title, description, date, type, category, tags, is_visible } = req.body;
   const file = req.file;      
   if (!title || !file || !type) {
@@ -122,7 +134,7 @@ router.get('/admin', async (req, res) => {
 });
 
 // PATCH /api/archives/:id/visibility - Toggle archive visibility (admin only)
-router.patch('/:id/visibility', async (req, res) => {
+router.patch('/:id/visibility', isAuthenticated, async (req, res) => {
   const { id } = req.params;
   const { is_visible } = req.body;
   
@@ -137,7 +149,7 @@ router.patch('/:id/visibility', async (req, res) => {
 });
 
 // DELETE /api/archives/:id - Delete archive (admin only)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', isAuthenticated, async (req, res) => {
   const { id } = req.params;
   try {
     // Get file URL to delete file from disk

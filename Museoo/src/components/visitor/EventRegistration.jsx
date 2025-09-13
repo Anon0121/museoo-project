@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import api from '../../config/api';
 
-const EventRegistration = ({ exhibit, onClose, onRegistrationSuccess }) => {
+const EventRegistration = ({ exhibit, onClose, onRegistrationSuccess, onShowNotification }) => {
   const [form, setForm] = useState({
     firstname: '',
     lastname: '',
@@ -38,8 +38,29 @@ const EventRegistration = ({ exhibit, onClose, onRegistrationSuccess }) => {
       console.log('📡 Registration response:', response.data);
 
       if (response.data.success) {
-        console.log('✅ Registration successful, showing success popup');
-        setShowSuccessPopup(true);
+        console.log('✅ Registration successful, closing form and showing notification');
+        
+        // Close the form first
+        onClose();
+        
+        // Scroll to Events section and show notification
+        setTimeout(() => {
+          const eventsSection = document.getElementById('event');
+          if (eventsSection) {
+            eventsSection.scrollIntoView({ 
+              behavior: 'smooth',
+              block: 'start'
+            });
+          }
+          
+          // Show notification after scrolling
+          setTimeout(() => {
+            if (onShowNotification) {
+              onShowNotification('Registration Successful!', 'You have successfully registered for the event.');
+            }
+          }, 500);
+        }, 100);
+        
         if (onRegistrationSuccess) {
           onRegistrationSuccess(response.data.registration);
         }
@@ -53,8 +74,29 @@ const EventRegistration = ({ exhibit, onClose, onRegistrationSuccess }) => {
       
       // Check if it's an already registered case (which now returns success)
       if (error.response?.data?.success && error.response?.data?.alreadyRegistered) {
-        console.log('✅ Already registered case, showing success popup');
-        setShowSuccessPopup(true);
+        console.log('✅ Already registered case, closing form and showing notification');
+        
+        // Close the form first
+        onClose();
+        
+        // Scroll to Events section and show notification
+        setTimeout(() => {
+          const eventsSection = document.getElementById('event');
+          if (eventsSection) {
+            eventsSection.scrollIntoView({ 
+              behavior: 'smooth',
+              block: 'start'
+            });
+          }
+          
+          // Show notification after scrolling
+          setTimeout(() => {
+            if (onShowNotification) {
+              onShowNotification('Already Registered!', 'You are already registered for this event.');
+            }
+          }, 500);
+        }, 100);
+        
         if (onRegistrationSuccess) {
           onRegistrationSuccess(error.response.data.registration);
         }
@@ -72,112 +114,65 @@ const EventRegistration = ({ exhibit, onClose, onRegistrationSuccess }) => {
     onClose(); // Close the registration form as well
   };
 
-  // Success Popup Component
-  const SuccessPopup = () => {
-    if (!showSuccessPopup) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6">
-          <div className="text-center">
-            <div className="w-20 h-20 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <i className="fa-solid fa-check-circle text-white text-3xl"></i>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Thank You! 🎉</h2>
-            
-            <div className="bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-lg p-4 mb-6">
-              <div className="flex items-start">
-                <i className="fa-solid fa-envelope text-green-500 text-xl mt-1 mr-3"></i>
-                <div className="text-left">
-                  <h3 className="font-bold text-green-800 mb-2 text-lg">Registration Confirmed</h3>
-                  <p className="text-sm text-green-700 mb-3">
-                    Thank you for your interest in our event! Please wait for the invitation email with your QR code.
-                  </p>
-                  <div className="bg-white rounded-lg p-3 border border-green-100">
-                    <p className="text-xs text-green-600 font-medium">
-                      <i className="fa-solid fa-info-circle mr-1"></i>
-                      You will receive an email within 24-48 hours
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
-              <div className="flex items-start">
-                <i className="fa-solid fa-bell text-blue-500 text-xl mt-1 mr-3"></i>
-                <div className="text-left">
-                  <h3 className="font-bold text-blue-800 mb-2 text-lg">What's Next?</h3>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Check your email for the invitation</li>
-                    <li>• Save the QR code attachment</li>
-                    <li>• Bring the QR code to the event</li>
-                    <li>• Arrive 10 minutes early</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
-              <div className="flex items-start">
-                <i className="fa-solid fa-exclamation-triangle text-yellow-500 text-xl mt-1 mr-3"></i>
-                <div className="text-left">
-                  <h3 className="font-bold text-yellow-800 mb-2 text-lg">Important Reminders</h3>
-                  <ul className="text-sm text-yellow-700 space-y-1">
-                    <li>• Check your spam folder if no email</li>
-                    <li>• Contact us if you don't receive the email</li>
-                    <li>• Keep your QR code safe</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleCloseSuccess}
-              className="w-full bg-gradient-to-r from-[#8B6B21] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#8B6B21] text-white py-3 px-6 rounded-xl font-semibold transition-all duration-300"
-            >
-              <i className="fa-solid fa-check mr-2"></i>
-              Got it!
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
-      {/* Success Popup */}
-      <SuccessPopup />
-      
       {/* Registration Form Modal */}
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-          <div className="bg-gradient-to-r from-[#2e2b41] to-[#AB8841] p-6 rounded-t-2xl">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold text-white">Register for Event</h2>
+      <div className="fixed inset-0 flex items-center justify-center z-[99999] p-4">
+        {/* Blurred Background */}
+        <div 
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('/src/assets/citymus.jpg')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            filter: 'blur(8px)',
+            transform: 'scale(1.1)'
+          }}
+        ></div>
+        
+        {/* Content overlay */}
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
+
+        {/* Modal Content - Sharp and Clear */}
+        <div className="relative z-10 bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+          {/* Fixed Header with Museum Branding */}
+          <div className="p-6 border-b border-[#E5B80B]/20 bg-gradient-to-r from-[#351E10] to-[#2A1A0D] rounded-t-2xl flex-shrink-0">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-2xl font-bold text-white mb-2" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  Event Registration
+                </h2>
+                <p className="text-white/90 text-sm leading-relaxed" style={{fontFamily: 'Lora, serif'}}>
+                  {exhibit.title}
+                </p>
+              </div>
               <button
                 onClick={onClose}
-                className="text-white hover:text-gray-200 text-2xl font-bold"
+                className="p-2.5 rounded-full hover:bg-white/20 transition-all duration-200 hover:scale-105 shadow-sm"
               >
-                ×
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-            <p className="text-white/80 mt-2">{exhibit.title}</p>
           </div>
 
-          <div className="p-6">
+          {/* Scrollable Form Content */}
+          <div className="flex-1 overflow-y-auto p-6">
             {error && (
-              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-                <i className="fa-solid fa-exclamation-triangle mr-2"></i>
-                {error}
+              <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 rounded-lg">
+                <div className="flex items-center">
+                  <i className="fa-solid fa-exclamation-triangle text-red-500 mr-3"></i>
+                  <p className="text-red-700 font-medium" style={{fontFamily: 'Telegraf, sans-serif'}}>{error}</p>
+                </div>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[#2e2b41] font-semibold mb-2">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="block text-[#351E10] font-semibold text-sm uppercase tracking-wide" style={{fontFamily: 'Telegraf, sans-serif'}}>
                     First Name *
                   </label>
                   <input
@@ -185,13 +180,14 @@ const EventRegistration = ({ exhibit, onClose, onRegistrationSuccess }) => {
                     name="firstname"
                     value={form.firstname}
                     onChange={handleChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-                    placeholder="Enter first name"
+                    className="w-full p-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E5B80B] focus:border-[#E5B80B] transition-all duration-200 bg-gray-50 focus:bg-white"
+                    placeholder="Enter your first name"
+                    style={{fontFamily: 'Lora, serif'}}
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-[#2e2b41] font-semibold mb-2">
+                <div className="space-y-2">
+                  <label className="block text-[#351E10] font-semibold text-sm uppercase tracking-wide" style={{fontFamily: 'Telegraf, sans-serif'}}>
                     Last Name *
                   </label>
                   <input
@@ -199,88 +195,130 @@ const EventRegistration = ({ exhibit, onClose, onRegistrationSuccess }) => {
                     name="lastname"
                     value={form.lastname}
                     onChange={handleChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-                    placeholder="Enter last name"
+                    className="w-full p-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E5B80B] focus:border-[#E5B80B] transition-all duration-200 bg-gray-50 focus:bg-white"
+                    placeholder="Enter your last name"
+                    style={{fontFamily: 'Lora, serif'}}
                     required
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[#2e2b41] font-semibold mb-2">
-                  Email *
+              <div className="space-y-2">
+                <label className="block text-[#351E10] font-semibold text-sm uppercase tracking-wide" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  Email Address *
                 </label>
                 <input
                   type="email"
                   name="email"
                   value={form.email}
                   onChange={handleChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-                  placeholder="Enter email address"
+                  className="w-full p-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E5B80B] focus:border-[#E5B80B] transition-all duration-200 bg-gray-50 focus:bg-white"
+                  placeholder="Enter your email address"
+                  style={{fontFamily: 'Lora, serif'}}
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[#2e2b41] font-semibold mb-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="block text-[#351E10] font-semibold text-sm uppercase tracking-wide" style={{fontFamily: 'Telegraf, sans-serif'}}>
                     Gender *
                   </label>
                   <select
                     name="gender"
                     value={form.gender}
                     onChange={handleChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                    className="w-full p-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E5B80B] focus:border-[#E5B80B] transition-all duration-200 bg-gray-50 focus:bg-white"
+                    style={{fontFamily: 'Lora, serif'}}
                     required
                   >
-                    <option value="">Select gender</option>
+                    <option value="">Select your gender</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
-                    <option value="lgbtq">LGBTQ</option>
+                    <option value="lgbtq">LGBTQ+</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[#2e2b41] font-semibold mb-2">
+                <div className="space-y-2">
+                  <label className="block text-[#351E10] font-semibold text-sm uppercase tracking-wide" style={{fontFamily: 'Telegraf, sans-serif'}}>
                     Visitor Type *
                   </label>
                   <select
                     name="visitor_type"
                     value={form.visitor_type}
                     onChange={handleChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                    className="w-full p-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E5B80B] focus:border-[#E5B80B] transition-all duration-200 bg-gray-50 focus:bg-white"
+                    style={{fontFamily: 'Lora, serif'}}
                     required
                   >
-                    <option value="">Select type</option>
-                    <option value="local">Local</option>
-                    <option value="foreign">Foreign</option>
+                    <option value="">Select visitor type</option>
+                    <option value="local">Local Visitor</option>
+                    <option value="foreign">Foreign Visitor</option>
                   </select>
                 </div>
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-[#2e2b41] mb-2">Event Details</h3>
-                <div className="space-y-1 text-sm text-gray-600">
-                  <p><strong>Date:</strong> {new Date(exhibit.start_date).toLocaleDateString()}</p>
-                  <p><strong>Time:</strong> {exhibit.time ? new Date(`2000-01-01T${exhibit.time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'TBD'}</p>
-                  <p><strong>Location:</strong> {exhibit.location}</p>
-                  <p><strong>Available Slots:</strong> {(exhibit.max_capacity || 0) - (exhibit.current_registrations || 0)}</p>
+              {/* Event Details Section */}
+              <div className="bg-gradient-to-br from-[#f8f9fa] to-[#f1f3f4] p-6 rounded-xl border border-[#E5B80B]/10">
+                <h3 className="text-lg font-bold text-[#351E10] mb-4 flex items-center" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  <i className="fa-solid fa-calendar-check mr-3 text-[#E5B80B]"></i>
+                  Event Details
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-[#E5B80B]/10 rounded-lg flex items-center justify-center">
+                      <i className="fa-solid fa-calendar text-[#8B6B21]"></i>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium" style={{fontFamily: 'Telegraf, sans-serif'}}>Date</p>
+                      <p className="text-[#351E10] font-semibold" style={{fontFamily: 'Lora, serif'}}>{new Date(exhibit.start_date).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-[#E5B80B]/10 rounded-lg flex items-center justify-center">
+                      <i className="fa-solid fa-clock text-[#8B6B21]"></i>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium" style={{fontFamily: 'Telegraf, sans-serif'}}>Time</p>
+                      <p className="text-[#351E10] font-semibold" style={{fontFamily: 'Lora, serif'}}>{exhibit.time ? new Date(`2000-01-01T${exhibit.time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'TBD'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-[#E5B80B]/10 rounded-lg flex items-center justify-center">
+                      <i className="fa-solid fa-map-marker-alt text-[#8B6B21]"></i>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium" style={{fontFamily: 'Telegraf, sans-serif'}}>Location</p>
+                      <p className="text-[#351E10] font-semibold" style={{fontFamily: 'Lora, serif'}}>{exhibit.location}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-[#E5B80B]/10 rounded-lg flex items-center justify-center">
+                      <i className="fa-solid fa-users text-[#8B6B21]"></i>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium" style={{fontFamily: 'Telegraf, sans-serif'}}>Available Slots</p>
+                      <p className="text-[#351E10] font-semibold" style={{fontFamily: 'Lora, serif'}}>{(exhibit.max_capacity || 0) - (exhibit.current_registrations || 0)}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-4">
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-6">
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 bg-gradient-to-r from-[#8B6B21] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#8B6B21] text-white py-3 px-6 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-gradient-to-r from-[#8B6B21] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#8B6B21] text-white py-4 px-6 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  style={{fontFamily: 'Telegraf, sans-serif'}}
                 >
                   {submitting ? (
                     <>
-                      <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                      <i className="fa-solid fa-spinner fa-spin mr-3"></i>
                       Registering...
                     </>
                   ) : (
                     <>
-                      <i className="fa-solid fa-user-plus mr-2"></i>
+                      <i className="fa-solid fa-user-plus mr-3"></i>
                       Register Now
                     </>
                   )}
@@ -288,7 +326,8 @@ const EventRegistration = ({ exhibit, onClose, onRegistrationSuccess }) => {
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                  className="px-6 py-4 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
+                  style={{fontFamily: 'Telegraf, sans-serif'}}
                 >
                   Cancel
                 </button>

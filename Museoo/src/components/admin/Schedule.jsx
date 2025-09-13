@@ -24,7 +24,22 @@ const Schedule = () => {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [notification, setNotification] = useState({
+    show: false,
+    type: 'success',
+    title: '',
+    message: '',
+    description: ''
+  });
+  const [confirmationModal, setConfirmationModal] = useState({
+    show: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+    onCancel: null
+  });
   
   // New state for filtering and search
   const [searchTerm, setSearchTerm] = useState("");
@@ -37,6 +52,10 @@ const Schedule = () => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [bookingDetails, setBookingDetails] = useState(null);
   const [modalVisitors, setModalVisitors] = useState([]);
+  const [expandedBookings, setExpandedBookings] = useState(new Set());
+  const [additionalVisitorsData, setAdditionalVisitorsData] = useState({});
+  const [visitorsPerPage, setVisitorsPerPage] = useState(6); // Show 6 visitors per page
+  const [visitorPages, setVisitorPages] = useState({}); // Track current page for each booking
 
   // Load from localStorage
   useEffect(() => {
@@ -90,6 +109,25 @@ const Schedule = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    setForm({
+      firstName: "",
+      lastName: "",
+      email: "",
+      visitorType: "",
+      gender: "",
+      address: "",
+      purpose: "",
+      institution: "",
+      visitType: "indwalkin",
+      visitDate: "",
+      selectedSlot: "",
+      status: "Pending",
+    });
+    setAdditionalVisitors([]);
+  };
+
   const handleSlotSelect = (slotTime) => {
     // Toggle selection - if clicking the same slot, unselect it
     setForm({ ...form, selectedSlot: form.selectedSlot === slotTime ? "" : slotTime });
@@ -98,6 +136,8 @@ const Schedule = () => {
   const addSchedule = async (e) => {
     e.preventDefault();
     if (!form.selectedSlot) return;
+    
+    setSubmitting(true);
 
     // Determine the booking type based on visit type
     let bookingType;
@@ -134,8 +174,8 @@ const Schedule = () => {
       payload = {
         type: bookingType,
         mainVisitor: {
-          firstName: "",
-          lastName: "",
+          firstName: "Group",
+          lastName: "Leader",
           email: form.email,
           gender: "",
           address: "",
@@ -166,15 +206,23 @@ const Schedule = () => {
         const result = await res.json();
         
         // Show success message with booking details
-        let successMessage = `Booking created successfully!\n\nBooking ID: ${result.booking_id}\nType: ${bookingType}\nTotal Visitors: ${payload.totalVisitors}\n\n`;
+        let successTitle = 'Schedule Created Successfully!';
+        let successMessage = `Booking ID: ${result.booking_id}\nType: ${bookingType}\nTotal Visitors: ${payload.totalVisitors}`;
+        let successDescription = '';
         
         if (form.visitType === "indwalkin") {
-          successMessage += `Ind-Walkin booking created successfully! It is now pending approval. Once approved, the visitor will receive an email with QR code and link to complete their profile (24-hour expiration).`;
+          successDescription = 'Ind-Walkin booking created successfully! It is now pending approval. Once approved, the visitor will receive an email with QR code and link to complete their profile (24-hour expiration).';
         } else if (form.visitType === "groupwalkin") {
-          successMessage += `Group-Walkin booking created successfully! It is now pending approval. Once approved, all visitors will receive emails with QR codes and profile completion links (24-hour expiration).`;
+          successDescription = 'Group-Walkin booking created successfully! It is now pending approval. Once approved, all visitors will receive emails with QR codes and profile completion links (24-hour expiration).';
         }
         
-        alert(successMessage);
+        setNotification({
+          show: true,
+          type: 'success',
+          title: successTitle,
+          message: successMessage,
+          description: successDescription
+        });
         
         // Reset form
         setForm({
@@ -192,15 +240,29 @@ const Schedule = () => {
           status: "Pending",
         });
         setAdditionalVisitors([]);
-        setShowForm(false);
+        setShowAddModal(false);
         fetchBookings();
       } else {
         const errorData = await res.json();
-        alert(`Failed to add booking: ${errorData.message || 'Unknown error'}`);
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Failed to Create Schedule',
+          message: errorData.message || 'Unknown error occurred',
+          description: ''
+        });
       }
     } catch (err) {
       console.error("Error adding booking:", err);
-      alert("Error adding booking. Please try again.");
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Error Creating Schedule',
+        message: 'An unexpected error occurred. Please try again.',
+        description: ''
+      });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -211,22 +273,49 @@ const Schedule = () => {
   };
 
   const deleteSchedule = async (bookingId) => {
-    if (window.confirm('Delete this schedule?')) {
-      try {
+    setConfirmationModal({
+      show: true,
+      title: 'Delete Schedule',
+      message: 'Are you sure you want to delete this schedule? This action cannot be undone.',
+      onConfirm: async () => {
+        setConfirmationModal({ show: false, title: '', message: '', onConfirm: null, onCancel: null });
+        try {
         const response = await fetch(`http://localhost:3000/api/slots/bookings/${bookingId}`, {
           method: 'DELETE',
         });
         if (response.ok) {
-          alert('Booking deleted successfully!');
+          setNotification({
+            show: true,
+            type: 'success',
+            title: 'Schedule Deleted Successfully!',
+            message: 'The booking has been permanently removed from the system.',
+            description: ''
+          });
           fetchBookings(); // Refresh the list
         } else {
-          alert('Failed to delete booking');
+          setNotification({
+            show: true,
+            type: 'error',
+            title: 'Failed to Delete Schedule',
+            message: 'There was an error deleting the booking. Please try again.',
+            description: ''
+          });
         }
       } catch (error) {
         console.error('Error deleting booking:', error);
-        alert('Error deleting booking');
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Error Deleting Schedule',
+          message: 'An unexpected error occurred. Please try again.',
+          description: ''
+        });
       }
-    }
+      },
+      onCancel: () => {
+        setConfirmationModal({ show: false, title: '', message: '', onConfirm: null, onCancel: null });
+      }
+    });
   };
 
   // New action handlers for booking management
@@ -276,8 +365,13 @@ const Schedule = () => {
   };
 
   const handleApproveBooking = async (booking) => {
-    if (window.confirm(`Approve booking for ${booking.first_name} ${booking.last_name}?`)) {
-      try {
+    setConfirmationModal({
+      show: true,
+      title: 'Approve Booking',
+      message: `Are you sure you want to approve the booking for ${booking.first_name} ${booking.last_name}?`,
+      onConfirm: async () => {
+        setConfirmationModal({ show: false, title: '', message: '', onConfirm: null, onCancel: null });
+        try {
         const response = await fetch(`http://localhost:3000/api/slots/bookings/${booking.booking_id}/approve`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -287,39 +381,88 @@ const Schedule = () => {
         const data = await response.json();
 
         if (response.ok && data.success) {
-          alert('Booking approved successfully!');
+          setNotification({
+            show: true,
+            type: 'success',
+            title: 'Schedule Approved Successfully!',
+            message: 'The booking has been approved and notifications have been sent.',
+            description: ''
+          });
           fetchBookings(); // Only refresh if success
         } else {
-          alert('Failed to approve booking: ' + (data.message || 'Unknown error'));
+          setNotification({
+            show: true,
+            type: 'error',
+            title: 'Failed to Approve Schedule',
+            message: data.message || 'Unknown error occurred',
+            description: ''
+          });
           // Do NOT refresh bookings, so status/button stays as pending
         }
       } catch (error) {
         console.error('Error approving booking:', error);
-        alert('Error approving booking');
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Error Approving Schedule',
+          message: 'An unexpected error occurred. Please try again.',
+          description: ''
+        });
         // Do NOT refresh bookings, so status/button stays as pending
       }
-    }
+      },
+      onCancel: () => {
+        setConfirmationModal({ show: false, title: '', message: '', onConfirm: null, onCancel: null });
+      }
+    });
   };
 
   const handleCancelBooking = async (booking) => {
-    if (window.confirm(`Cancel booking for ${booking.first_name} ${booking.last_name}?`)) {
-      try {
+    setConfirmationModal({
+      show: true,
+      title: 'Cancel Booking',
+      message: `Are you sure you want to cancel the booking for ${booking.first_name} ${booking.last_name}?`,
+      onConfirm: async () => {
+        setConfirmationModal({ show: false, title: '', message: '', onConfirm: null, onCancel: null });
+        try {
         const response = await fetch(`http://localhost:3000/api/slots/bookings/${booking.booking_id}/cancel`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'cancelled' })
         });
         if (response.ok) {
-          alert('Booking cancelled successfully!');
+          setNotification({
+            show: true,
+            type: 'success',
+            title: 'Schedule Cancelled Successfully!',
+            message: 'The booking has been cancelled and notifications have been sent.',
+            description: ''
+          });
           fetchBookings(); // Refresh the list
         } else {
-          alert('Failed to cancel booking');
+          setNotification({
+            show: true,
+            type: 'error',
+            title: 'Failed to Cancel Schedule',
+            message: 'There was an error cancelling the booking. Please try again.',
+            description: ''
+          });
         }
       } catch (error) {
         console.error('Error cancelling booking:', error);
-        alert('Error cancelling booking');
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Error Cancelling Schedule',
+          message: 'An unexpected error occurred. Please try again.',
+          description: ''
+        });
       }
-    }
+      },
+      onCancel: () => {
+        setConfirmationModal({ show: false, title: '', message: '', onConfirm: null, onCancel: null });
+      }
+    });
   };
 
   // Separate current and archived bookings
@@ -373,6 +516,85 @@ const Schedule = () => {
     return statusMap[status?.toLowerCase()] || status;
   };
 
+  // Handle visitor pagination
+  const goToVisitorPage = (bookingId, page) => {
+    setVisitorPages(prev => ({
+      ...prev,
+      [bookingId]: page
+    }));
+  };
+
+  // Get paginated visitors for a booking
+  const getPaginatedVisitors = (bookingId, allVisitors) => {
+    // Sort visitors alphabetically by last name, then first name
+    const sortedVisitors = [...allVisitors].sort((a, b) => {
+      const aLastName = (a.lastName || '').toLowerCase();
+      const bLastName = (b.lastName || '').toLowerCase();
+      const aFirstName = (a.firstName || '').toLowerCase();
+      const bFirstName = (b.firstName || '').toLowerCase();
+      
+      // First sort by last name
+      if (aLastName !== bLastName) {
+        return aLastName.localeCompare(bLastName);
+      }
+      // If last names are the same, sort by first name
+      return aFirstName.localeCompare(bFirstName);
+    });
+    
+    const currentPage = visitorPages[bookingId] || 0;
+    const startIndex = currentPage * visitorsPerPage;
+    const endIndex = startIndex + visitorsPerPage;
+    return sortedVisitors.slice(startIndex, endIndex);
+  };
+
+  // Get total pages for a booking
+  const getTotalPages = (bookingId, allVisitors) => {
+    return Math.ceil(allVisitors.length / visitorsPerPage);
+  };
+
+  // Toggle expanded booking details
+  const toggleBookingDetails = async (bookingId, booking) => {
+    const newExpanded = new Set(expandedBookings);
+    
+    if (newExpanded.has(bookingId)) {
+      newExpanded.delete(bookingId);
+    } else {
+      newExpanded.add(bookingId);
+      
+      // Fetch additional visitors if they exist and we don't have them yet
+      if (booking.total_visitors > 1 && !additionalVisitorsData[bookingId]) {
+        try {
+          const visitorsResponse = await fetch(`http://localhost:3000/api/additional-visitors/booking/${bookingId}`);
+          if (visitorsResponse.ok) {
+            const visitorsData = await visitorsResponse.json();
+            
+            // Filter to only show additional visitors (not main visitors) and remove duplicates
+            const allVisitors = visitorsData.visitors || [];
+            
+            // Remove duplicates based on visitorId
+            const uniqueVisitors = allVisitors.filter((visitor, index, self) => 
+              index === self.findIndex(v => v.visitorId === visitor.visitorId)
+            );
+            
+            // Filter to only show additional visitors (not main visitors)
+            const additionalVisitorsOnly = uniqueVisitors.filter(visitor => 
+              !visitor.isMainVisitor
+            );
+            
+            setAdditionalVisitorsData(prev => ({
+              ...prev,
+              [bookingId]: additionalVisitorsOnly
+            }));
+          }
+        } catch (error) {
+          console.error('Error fetching additional visitors:', error);
+        }
+      }
+    }
+    
+    setExpandedBookings(newExpanded);
+  };
+
   // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -385,58 +607,91 @@ const Schedule = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-2 sm:p-4">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
+      <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 border border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#2e2b41] mb-2 font-['Lora']">
-              <i className="fa-solid fa-calendar mr-2 sm:mr-3"></i>
+            <h1 className="text-2xl md:text-3xl font-bold mb-2" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+              <i className="fa-solid fa-calendar mr-3" style={{color: '#E5B80B'}}></i>
               {showArchive ? 'Schedule Archive' : 'Schedule Management'}
             </h1>
-            <p className="text-gray-600 text-sm sm:text-base font-['Telegraph']">
+            <p className="text-sm md:text-base" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
               {showArchive 
                 ? `Archived schedules (older than 5 days) - ${archivedBookings.length} records` 
                 : 'Manage museum visit schedules and bookings'
               }
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-4 sm:mt-0">
             <button
               onClick={() => setShowArchive(!showArchive)}
-              className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg transition-colors font-semibold shadow-md text-sm sm:text-base font-['Telegraph'] ${
+              className={`px-4 md:px-6 py-2 md:py-3 rounded-lg transition-colors font-semibold shadow-md text-sm md:text-base ${
                 showArchive 
-                  ? 'bg-gray-600 text-white hover:bg-gray-700' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'text-white hover:bg-gray-700' 
+                  : 'text-white hover:bg-blue-700'
               }`}
+              style={{
+                backgroundColor: showArchive ? '#351E10' : '#351E10',
+                fontFamily: 'Telegraph, sans-serif'
+              }}
             >
               <i className={`fa-solid ${showArchive ? 'fa-calendar' : 'fa-archive'} mr-2`}></i>
               {showArchive ? 'Current Schedules' : 'View Archive'}
             </button>
             {!showArchive && (
               <button
-                onClick={() => setShowForm(!showForm)}
-                className="bg-[#AB8841] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-[#8B6B21] transition-colors font-semibold shadow-md text-sm sm:text-base font-['Telegraph']"
+                onClick={() => setShowAddModal(true)}
+                className="text-black px-4 md:px-6 py-2 md:py-3 rounded-lg hover:opacity-90 transition-colors font-semibold shadow-md text-sm md:text-base"
+                style={{backgroundColor: '#E5B80B', fontFamily: 'Telegraph, sans-serif'}}
               >
                 <i className="fa-solid fa-plus mr-2"></i>
-                {showForm ? "Cancel" : "Add Schedule"}
+                Add Schedule
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Add Schedule Form */}
-      {showForm && (
-        <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 md:p-8 border border-gray-200">
-          <h3 className="text-xl sm:text-2xl font-bold text-[#2e2b41] mb-4 sm:mb-6 font-['Lora']">
-            <i className="fa-solid fa-plus-circle mr-2 sm:mr-3"></i>
-            Add New Schedule
-          </h3>
-          <form onSubmit={addSchedule} className="space-y-6">
+      {/* Add Schedule Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-xl sm:rounded-3xl shadow-2xl max-w-4xl w-full max-h-[98vh] sm:max-h-[95vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="relative p-8" style={{background: 'linear-gradient(135deg, #351E10 0%, #2A1A0D 50%, #1A0F08 100%)'}}>
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#E5B80B]/10 to-transparent"></div>
+              <div className="relative flex justify-between items-center">
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{background: 'linear-gradient(135deg, #E5B80B, #D4AF37)'}}>
+                    <i className="fa-solid fa-calendar-plus text-2xl text-white"></i>
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold text-white" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                      Create New Schedule
+                    </h2>
+                    <p className="text-[#E5B80B] text-sm mt-1" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                      Add a new booking to your museum's schedule
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeAddModal}
+                  className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-300 flex items-center justify-center group"
+                >
+                  <svg className="w-6 h-6 text-white group-hover:rotate-90 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Form Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-8 bg-gradient-to-br from-gray-50 to-white">
+          <form id="schedule-form" onSubmit={addSchedule} className="space-y-6">
             {/* Visit Type Selection */}
             <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-              <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-[#2e2b41] font-['Lora']">
+              <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                 <i className="fa-solid fa-users mr-2"></i>
                 Visit Type
               </h4>
@@ -449,8 +704,9 @@ const Schedule = () => {
                     checked={form.visitType === "indwalkin"}
                     onChange={handleInputChange}
                     className="mr-2"
+                    style={{accentColor: '#E5B80B'}}
                   />
-                  <span className="text-sm font-medium font-['Telegraph']">Ind-Walkin</span>
+                  <span className="text-sm font-medium" style={{fontFamily: 'Telegraph, sans-serif'}}>Ind-Walkin</span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -460,15 +716,16 @@ const Schedule = () => {
                     checked={form.visitType === "groupwalkin"}
                     onChange={handleInputChange}
                     className="mr-2"
+                    style={{accentColor: '#E5B80B'}}
                   />
-                  <span className="text-sm font-medium font-['Telegraph']">Group-Walkin</span>
+                  <span className="text-sm font-medium" style={{fontFamily: 'Telegraph, sans-serif'}}>Group-Walkin</span>
                 </label>
               </div>
             </div>
 
             {/* Primary Visitor Information */}
             <div className="bg-blue-50 p-3 sm:p-4 rounded-lg">
-              <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-[#2e2b41] font-['Lora']">
+              <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                 <i className="fa-solid fa-user mr-2"></i>
                 Primary Visitor Information
               </h4>
@@ -479,7 +736,7 @@ const Schedule = () => {
                   <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                     <div className="flex items-center">
                       <i className="fa-solid fa-clock text-orange-600 mr-2"></i>
-                      <span className="text-sm text-orange-800 font-['Telegraph']">
+                      <span className="text-sm text-orange-800" style={{fontFamily: 'Telegraph, sans-serif'}}>
                         <strong>Ind-Walkin:</strong> Individual walk-in booking. Only email and date required. 
                         Link expires in 24 hours. Requires approval before email is sent.
                       </span>
@@ -504,7 +761,7 @@ const Schedule = () => {
                   <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                     <div className="flex items-center">
                       <i className="fa-solid fa-users text-red-600 mr-2"></i>
-                      <span className="text-sm text-red-800 font-['Telegraph']">
+                      <span className="text-sm text-red-800" style={{fontFamily: 'Telegraph, sans-serif'}}>
                         <strong>Group-Walkin:</strong> Group walk-in booking. Primary visitor info + additional emails. 
                         Links expire in 24 hours. Requires approval before emails are sent.
                       </span>
@@ -516,21 +773,21 @@ const Schedule = () => {
                   
                   {/* Additional Visitors Section */}
                   <div className="mt-6 bg-green-50 p-4 rounded-lg">
-                    <h5 className="text-md font-semibold mb-3 text-[#2e2b41]">
+                    <h5 className="text-md font-semibold mb-3" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                       <i className="fa-solid fa-users mr-2"></i>
                       Additional Visitors
                     </h5>
                     <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="flex items-center">
                         <i className="fa-solid fa-exclamation-triangle text-yellow-600 mr-2"></i>
-                        <span className="text-sm text-yellow-800">
+                        <span className="text-sm text-yellow-800" style={{fontFamily: 'Telegraph, sans-serif'}}>
                           <strong>Note:</strong> Each additional visitor will receive an individual email with QR code and form link. 
                           All links expire in 24 hours. Maximum 29 additional visitors allowed.
                         </span>
                       </div>
                     </div>
                     <div className="mb-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium mb-2" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                         Number of Additional Visitors
                       </label>
                       <div className="flex items-center gap-3">
@@ -557,14 +814,15 @@ const Schedule = () => {
                               e.preventDefault();
                             }
                           }}
-                          className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent"
+                          className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:border-transparent"
+                          style={{fontFamily: 'Telegraph, sans-serif', focusRingColor: '#E5B80B'}}
                           placeholder="0"
                         />
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-gray-600" style={{fontFamily: 'Telegraph, sans-serif'}}>
                           additional visitors (Total: {additionalVisitors.length + 1})
                         </span>
                         {additionalVisitors.length >= 29 && (
-                          <span className="text-xs text-red-600 font-medium">
+                          <span className="text-xs text-red-600 font-medium" style={{fontFamily: 'Telegraph, sans-serif'}}>
                             Maximum limit reached
                           </span>
                         )}
@@ -573,7 +831,7 @@ const Schedule = () => {
                     
                     {additionalVisitors.map((visitor, index) => (
                       <div key={visitor.id} className="bg-white p-4 rounded-lg border border-gray-200 mb-3">
-                        <h6 className="text-sm font-semibold text-[#2e2b41] mb-3">
+                        <h6 className="text-sm font-semibold mb-3" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                           Additional Visitor {index + 1}
                         </h6>
                         <div className="w-full">
@@ -596,7 +854,7 @@ const Schedule = () => {
                   
                   {/* Visit Date Section */}
                   <div className="mt-6 bg-purple-50 p-4 rounded-lg">
-                    <h5 className="text-md font-semibold mb-3 text-[#2e2b41]">
+                    <h5 className="text-md font-semibold mb-3" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                       <i className="fa-solid fa-calendar mr-2"></i>
                       Visit Date
                     </h5>
@@ -617,14 +875,14 @@ const Schedule = () => {
             {/* Time Slot Table */}
             {form.visitDate && (
               <div className="mt-8">
-                <h4 className="text-lg font-semibold mb-4 text-[#2e2b41]">
+                <h4 className="text-lg font-semibold mb-4" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                   <i className="fa-solid fa-clock mr-2"></i>
                   Select a Time Slot
                 </h4>
                 {loadingSlots ? (
                   <div className="text-center py-8">
-                    <i className="fa-solid fa-spinner fa-spin text-[#AB8841] text-2xl mb-2"></i>
-                    <p className="text-gray-600">Loading available slots...</p>
+                    <i className="fa-solid fa-spinner fa-spin text-2xl mb-2" style={{color: '#E5B80B'}}></i>
+                    <p className="text-gray-600" style={{fontFamily: 'Telegraph, sans-serif'}}>Loading available slots...</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -639,11 +897,16 @@ const Schedule = () => {
                           key={slot.time}
                           className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
                             isSelected 
-                              ? 'border-[#AB8841] bg-[#AB8841] text-white shadow-lg' 
+                              ? 'text-white shadow-lg' 
                               : isFull
                                 ? 'border-gray-300 bg-gray-100 cursor-not-allowed'
-                                : 'border-gray-200 bg-white hover:border-[#AB8841] hover:shadow-md'
+                                : 'border-gray-200 bg-white hover:shadow-md'
                           }`}
+                          style={{
+                            borderColor: isSelected ? '#E5B80B' : isFull ? '#d1d5db' : '#e5e7eb',
+                            backgroundColor: isSelected ? '#E5B80B' : isFull ? '#f3f4f6' : 'white',
+                            '--hover-border-color': '#E5B80B'
+                          }}
                           onClick={() => !isFull && handleSlotSelect(slot.time)}
                         >
                           <div className="text-center">
@@ -652,21 +915,21 @@ const Schedule = () => {
                               isFull ? 'text-gray-500' :
                               availableSlots === 0 ? 'text-red-600' : 
                               availableSlots <= 5 ? 'text-orange-600' : 'text-green-600'
-                            }`}>
+                            }`} style={{fontFamily: 'Telegraph, sans-serif'}}>
                               {availableSlots}
                             </div>
                             <div className={`text-xs font-medium mb-1 ${
                               isSelected ? 'text-white' : 'text-gray-500'
-                            }`}>
+                            }`} style={{fontFamily: 'Telegraph, sans-serif'}}>
                               slots available
                             </div>
                             <div className={`text-sm font-semibold ${
-                              isSelected ? 'text-white' : 'text-[#2e2b41]'
-                            }`}>
+                              isSelected ? 'text-white' : ''
+                            }`} style={{color: isSelected ? 'white' : '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                               {slot.time}
                             </div>
                             {isFull && (
-                              <div className="text-xs text-red-600 font-medium mt-1">
+                              <div className="text-xs text-red-600 font-medium mt-1" style={{fontFamily: 'Telegraph, sans-serif'}}>
                                 FULL
                               </div>
                             )}
@@ -679,25 +942,46 @@ const Schedule = () => {
               </div>
             )}
             
-            <div className="flex gap-4 pt-4">
-              <button
-                type="submit"
-                disabled={!form.selectedSlot}
-                className="bg-[#AB8841] hover:bg-[#8B6B21] text-white px-8 py-3 rounded-lg font-semibold transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <i className="fa-solid fa-plus mr-2"></i>
-                Add Schedule
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors shadow-md"
-              >
-                <i className="fa-solid fa-times mr-2"></i>
-                Cancel
-              </button>
-            </div>
           </form>
+          
+          {/* Action Buttons - Directly below form content */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-4 sm:mt-6">
+            <button
+              type="button"
+              onClick={closeAddModal}
+              className="w-full sm:w-auto px-4 sm:px-6 md:px-8 py-2 sm:py-2 md:py-3 rounded-lg font-semibold transition-colors shadow-md text-sm sm:text-sm md:text-base order-1 sm:order-1"
+              style={{backgroundColor: '#6B7280', color: 'white', fontFamily: 'Telegraf, sans-serif'}}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#4B5563'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#6B7280'}
+            >
+              <i className="fa-solid fa-times mr-2"></i>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="schedule-form"
+              disabled={submitting}
+              className="w-full sm:w-auto px-4 sm:px-6 md:px-8 py-2 sm:py-2 md:py-3 rounded-lg font-semibold transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-sm md:text-base order-2 sm:order-2"
+              style={{backgroundColor: '#E5B80B', color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#d4a509'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#E5B80B'}
+            >
+              {submitting ? (
+                <>
+                  <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                  Creating Schedule...
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-plus mr-2"></i>
+                  Create Schedule
+                </>
+              )}
+            </button>
+          </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -705,25 +989,25 @@ const Schedule = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
         <div className="bg-white rounded-lg shadow-lg p-3 sm:p-4 md:p-6 border border-gray-200">
           <div className="flex items-center">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-blue-100 rounded-full flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
-              <i className="fa-solid fa-calendar text-blue-600 text-sm sm:text-lg md:text-xl"></i>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center mr-2 sm:mr-3 md:mr-4" style={{backgroundColor: '#E5B80B'}}>
+              <i className="fa-solid fa-calendar text-white text-sm sm:text-lg md:text-xl"></i>
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-600 font-['Lora']">Total Bookings</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-600 font-['Telegraph']">{bookings.length}</p>
+              <p className="text-xs sm:text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Total Bookings</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold" style={{color: '#E5B80B', fontFamily: 'Telegraph, sans-serif'}}>{bookings.length}</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-3 sm:p-4 md:p-6 border border-gray-200">
           <div className="flex items-center">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-yellow-100 rounded-full flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
-              <i className="fa-solid fa-clock text-yellow-600 text-sm sm:text-lg md:text-xl"></i>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center mr-2 sm:mr-3 md:mr-4" style={{backgroundColor: '#351E10'}}>
+              <i className="fa-solid fa-clock text-white text-sm sm:text-lg md:text-xl"></i>
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-600 font-['Lora']">Pending</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-yellow-600 font-['Telegraph']">
-                {bookings.filter(b => b.status === 'pending').length}
+              <p className="text-xs sm:text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Pending</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                {bookings.filter(b => b.status?.toLowerCase() === 'pending').length}
               </p>
             </div>
           </div>
@@ -731,13 +1015,13 @@ const Schedule = () => {
 
         <div className="bg-white rounded-lg shadow-lg p-3 sm:p-4 md:p-6 border border-gray-200">
           <div className="flex items-center">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-green-100 rounded-full flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
-              <i className="fa-solid fa-check text-green-600 text-sm sm:text-lg md:text-xl"></i>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center mr-2 sm:mr-3 md:mr-4" style={{backgroundColor: '#E5B80B'}}>
+              <i className="fa-solid fa-check text-white text-sm sm:text-lg md:text-xl"></i>
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-600 font-['Lora']">Approved</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-600 font-['Telegraph']">
-                {bookings.filter(b => b.status === 'approved').length}
+              <p className="text-xs sm:text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Approved</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold" style={{color: '#E5B80B', fontFamily: 'Telegraph, sans-serif'}}>
+                {bookings.filter(b => b.status?.toLowerCase() === 'approved').length}
               </p>
             </div>
           </div>
@@ -745,63 +1029,71 @@ const Schedule = () => {
 
         <div className="bg-white rounded-lg shadow-lg p-3 sm:p-4 md:p-6 border border-gray-200">
           <div className="flex items-center">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-red-100 rounded-full flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
-              <i className="fa-solid fa-times text-red-600 text-sm sm:text-lg md:text-xl"></i>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center mr-2 sm:mr-3 md:mr-4" style={{backgroundColor: '#351E10'}}>
+              <i className="fa-solid fa-times text-white text-sm sm:text-lg md:text-xl"></i>
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-600 font-['Lora']">Cancelled</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-red-600 font-['Telegraph']">
-                {bookings.filter(b => b.status === 'cancelled').length}
+              <p className="text-xs sm:text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Cancelled</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                {bookings.filter(b => b.status?.toLowerCase() === 'cancelled').length}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Bookings Display */}
-      <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-[#2e2b41] to-[#AB8841]">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 border border-gray-200">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-white">
-                <i className="fa-solid fa-list mr-2"></i>
+            <h1 className="text-2xl md:text-3xl font-bold mb-2" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+              <i className="fa-solid fa-list mr-3" style={{color: '#E5B80B'}}></i>
                 All Bookings
-              </h2>
-              <p className="text-blue-100 mt-1">Manage and view all museum visit bookings</p>
+            </h1>
+            <p className="text-sm md:text-base" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Manage and view all museum visit bookings</p>
             </div>
-            <div className="mt-4 md:mt-0">
             <button
                   onClick={fetchBookings}
-                  className="bg-white bg-opacity-20 hover:bg-opacity-30 text-black px-4 py-2 rounded-lg font-medium transition-all duration-200">
+            className="px-4 md:px-6 py-2 md:py-3 rounded-lg transition-colors font-semibold shadow-md text-sm md:text-base"
+            style={{backgroundColor: '#E5B80B', color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}
+            onMouseEnter={(e) => e.target.style.backgroundColor = '#d4a509'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = '#E5B80B'}
+          >
                   <i className="fa-solid fa-sync-alt mr-2"></i>
                   Refresh
             </button>
-            </div>
           </div>
         </div>
 
+      {/* Bookings Display */}
+      <div className="bg-white rounded-lg shadow-lg border border-gray-200">
+
         {/* Filters Section */}
         <div className="px-4 sm:px-6 py-4 bg-gray-50 border-b">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+          <div className="space-y-3">
+            {/* Mobile: 2x2 grid, Desktop: 1x4 grid */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
             {/* Search */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 font-['Lora']">Search</label>
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Search</label>
               <input
                 type="text"
                 placeholder="Search by visitor name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent font-['Telegraph']"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm"
+                  style={{fontFamily: 'Telegraph, sans-serif', focusRingColor: '#E5B80B'}}
               />
             </div>
 
-            {/* Status Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 font-['Lora']">Status</label>
+              {/* Status */}
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Status</label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent font-['Telegraph']"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm"
+                  style={{fontFamily: 'Telegraph, sans-serif', focusRingColor: '#E5B80B'}}
               >
                 <option value="all">All Status</option>
                 <option value="pending">Pending</option>
@@ -812,23 +1104,25 @@ const Schedule = () => {
             </div>
 
             {/* Date Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 font-['Lora']">Date</label>
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Date</label>
               <input
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent font-['Telegraph']"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm"
+                  style={{fontFamily: 'Telegraph, sans-serif', focusRingColor: '#E5B80B'}}
               />
             </div>
 
             {/* Type Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 font-['Lora']">Type</label>
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Type</label>
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841] focus:border-transparent font-['Telegraph']"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm"
+                  style={{fontFamily: 'Telegraph, sans-serif', focusRingColor: '#E5B80B'}}
               >
                 <option value="all">All Types</option>
                 <option value="individual">Individual</option>
@@ -839,9 +1133,10 @@ const Schedule = () => {
             </div>
 
             {/* Results Count */}
-            <div className="flex items-end">
-              <div className="bg-[#AB8841] text-white px-4 py-2 rounded-lg font-medium font-['Telegraph']">
+              <div className="col-span-2 sm:col-span-1 flex items-end">
+                <div className="text-white px-4 py-2 rounded-lg font-medium w-full text-center" style={{backgroundColor: '#E5B80B', fontFamily: 'Telegraph, sans-serif'}}>
                 {filteredBookings.length} bookings
+                </div>
               </div>
             </div>
           </div>
@@ -866,7 +1161,7 @@ const Schedule = () => {
             <>
               {/* Desktop Table View */}
               <div className="hidden md:block">
-                <div className="text-xs text-gray-500 mb-2 font-['Telegraph']">Desktop View Active (768px+)</div>
+               
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
@@ -883,19 +1178,20 @@ const Schedule = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredBookings.map((booking, index) => (
-                      <tr key={booking.booking_id || index} className="hover:bg-gray-50 transition-colors duration-150">
+                      <React.Fragment key={booking.booking_id || index}>
+                        <tr className="hover:bg-gray-50 transition-colors duration-150">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-700 font-medium font-['Telegraph']">
+                            <div className="text-sm text-gray-700 font-medium" style={{fontFamily: 'Telegraph, sans-serif'}}>
                             {formatDate(booking.created_at)}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-[#2e2b41] font-['Telegraph']">
+                            <div className="text-sm font-medium" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                             {booking.first_name} {booking.last_name}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full font-['Telegraph'] ${
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                             booking.type === 'group' 
                               ? 'bg-purple-100 text-purple-800' 
                               : booking.type === 'individual'
@@ -905,48 +1201,70 @@ const Schedule = () => {
                               : booking.type === 'group-walkin'
                               ? 'bg-red-100 text-red-800'
                               : 'bg-gray-100 text-gray-800'
-                          }`}>
+                            }`} style={{fontFamily: 'Telegraph, sans-serif'}}>
                             {booking.type}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-[#2e2b41] font-['Telegraph']">{formatDate(booking.date)}</div>
-                          <div className="text-sm text-gray-500 font-['Telegraph']">{booking.time_slot}</div>
+                            <div className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{formatDate(booking.date)}</div>
+                            <div className="text-sm text-gray-500" style={{fontFamily: 'Telegraph, sans-serif'}}>{booking.time_slot}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={getStatusBadge(booking.status)}>
                             {getDisplayStatus(booking.status)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-[#2e2b41]">
-                          <div className="flex items-center font-['Telegraph']">
-                            <i className="fa-solid fa-users mr-2 text-[#AB8841]"></i>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <div className="flex items-center" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                              <i className="fa-solid fa-users mr-2" style={{color: '#E5B80B'}}></i>
                             {booking.total_visitors}
                           </div>
                         </td>
                         {!showArchive && (
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button className="text-blue-600 hover:text-blue-800 transition-colors duration-150 font-['Telegraph']" onClick={() => handleViewBooking(booking)}>
-                                <i className="fa-solid fa-eye mr-1"></i>
-                                View
+                              <div className="flex space-x-3">
+                                <button
+                                  onClick={() => toggleBookingDetails(booking.booking_id || index, booking)}
+                                  className={`px-3 py-1 rounded-lg border transition-all duration-200 hover:shadow-md ${
+                                    expandedBookings.has(booking.booking_id || index) 
+                                      ? 'shadow-md' 
+                                      : 'hover:shadow-sm'
+                                  }`}
+                                  style={{
+                                    color: expandedBookings.has(booking.booking_id || index) ? '#FFFFFF' : '#351E10',
+                                    backgroundColor: expandedBookings.has(booking.booking_id || index) ? '#351E10' : 'transparent',
+                                    borderColor: '#351E10', 
+                                    fontFamily: 'Telegraph, sans-serif'
+                                  }}
+                                >
+                                  <i className={`fa-solid fa-chevron-${expandedBookings.has(booking.booking_id || index) ? 'up' : 'down'} mr-1`}></i>
+                                  {expandedBookings.has(booking.booking_id || index) ? 'Hide Details' : 'Show Details'}
                               </button>
                               {booking.status !== 'cancelled' && (
-                                <button className="text-orange-600 hover:text-orange-800 transition-colors duration-150 font-['Telegraph']" onClick={() => handleCancelBooking(booking)}>
-                                  <i className="fa-solid fa-times mr-1"></i>
+                                  <button 
+                                    className="px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-md"
+                                    style={{backgroundColor: '#F59E0B', color: '#FFFFFF', fontFamily: 'Telegraph, sans-serif'}}
+                                    onClick={() => handleCancelBooking(booking)}
+                                  >
+                                    <i className="fa-solid fa-ban mr-1"></i>
                                   Cancel
                                 </button>
                               )}
                               {booking.status === 'pending' && (
                                 <button
-                                  className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition-colors duration-150 font-['Telegraph']"
+                                    className="px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-md"
+                                    style={{backgroundColor: '#10B981', color: '#FFFFFF', fontFamily: 'Telegraph, sans-serif'}}
                                   onClick={() => handleApproveBooking(booking)}
                                 >
                                   <i className="fa-solid fa-check mr-1"></i>
                                   Approve
                                 </button>
                               )}
-                              <button className="text-red-600 hover:text-red-800 transition-colors duration-150 font-['Telegraph']" onClick={() => deleteSchedule(booking.booking_id)}>
+                                <button 
+                                  className="px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-md"
+                                  style={{backgroundColor: '#EF4444', color: '#FFFFFF', fontFamily: 'Telegraph, sans-serif'}}
+                                  onClick={() => deleteSchedule(booking.booking_id)}
+                                >
                                 <i className="fa-solid fa-trash mr-1"></i>
                                 Delete
                               </button>
@@ -954,20 +1272,215 @@ const Schedule = () => {
                           </td>
                         )}
                       </tr>
+                        {/* Expanded Details Row */}
+                        {expandedBookings.has(booking.booking_id || index) && (
+                          <tr className="bg-gray-50">
+                            <td colSpan={showArchive ? "6" : "7"} className="px-6 py-4">
+                              <div className="space-y-4">
+                                {/* Booking Visitors Section */}
+                                <div>
+                                  <div className="flex items-center justify-between mb-4">
+                                    <h4 className="text-lg font-semibold" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                      <i className="fa-solid fa-users mr-2" style={{color: '#E5B80B'}}></i>
+                                      Booking Visitors
+                                    </h4>
+                                    <div className="text-sm font-mono px-3 py-1 rounded-lg" style={{backgroundColor: '#E5B80B', color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                      #{booking.booking_id}
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Primary Visitor */}
+                                    <div className="bg-gradient-to-br from-white to-gray-50 p-4 rounded-xl border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <h5 className="font-semibold text-lg" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                          {booking.first_name} {booking.last_name}
+                                        </h5>
+                                        <span className="inline-flex px-3 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                          <i className="fa-solid fa-crown mr-1"></i>
+                                          Primary
+                                        </span>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <div className="flex items-center">
+                                          <i className="fa-solid fa-envelope w-4 text-gray-400 mr-2"></i>
+                                          <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Email:</span>
+                                          <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                            {booking.email || 'Not provided'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <i className="fa-solid fa-user w-4 text-gray-400 mr-2"></i>
+                                          <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Gender:</span>
+                                          <span className="text-sm capitalize" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                            {booking.gender || 'Not specified'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <i className="fa-solid fa-tag w-4 text-gray-400 mr-2"></i>
+                                          <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Type:</span>
+                                          <span className="text-sm font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-700" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                            {booking.type}
+                                          </span>
+                                        </div>
+                                        {booking.institution && (
+                                          <div className="flex items-center">
+                                            <i className="fa-solid fa-building w-4 text-gray-400 mr-2"></i>
+                                            <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Institution:</span>
+                                            <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                              {booking.institution}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {booking.address && (
+                                          <div className="flex items-center">
+                                            <i className="fa-solid fa-map-marker-alt w-4 text-gray-400 mr-2"></i>
+                                            <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Address:</span>
+                                            <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                              {booking.address}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {booking.purpose_of_visit && (
+                                          <div className="flex items-center">
+                                            <i className="fa-solid fa-bullseye w-4 text-gray-400 mr-2"></i>
+                                            <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Purpose:</span>
+                                            <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                              {booking.purpose_of_visit}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Additional Visitors if any */}
+                                    {booking.total_visitors > 1 && (
+                                      additionalVisitorsData[booking.booking_id || index] ? (
+                                        <>
+                                          {getPaginatedVisitors(booking.booking_id || index, additionalVisitorsData[booking.booking_id || index]).map((visitor, visitorIndex) => (
+                                          <div key={visitorIndex} className="bg-gradient-to-br from-white to-gray-50 p-4 rounded-xl border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                            <div className="flex items-center justify-between mb-3">
+                                              <h5 className="font-semibold text-lg" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                                {visitor.firstName} {visitor.lastName}
+                                              </h5>
+                                              <span className="inline-flex px-3 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-800 border border-purple-200" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                                <i className="fa-solid fa-user-plus mr-1"></i>
+                                                Additional
+                                              </span>
+                                            </div>
+                                            <div className="space-y-2">
+                                              <div className="flex items-center">
+                                                <i className="fa-solid fa-envelope w-4 text-gray-400 mr-2"></i>
+                                                <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Email:</span>
+                                                <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                                  {visitor.email || 'Not provided'}
+                                                </span>
+                                              </div>
+                                              <div className="flex items-center">
+                                                <i className="fa-solid fa-user w-4 text-gray-400 mr-2"></i>
+                                                <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Gender:</span>
+                                                <span className="text-sm capitalize" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                                  {visitor.gender || 'Not specified'}
+                                                </span>
+                                              </div>
+                                              {visitor.visitorType && visitor.visitorType !== 'Visitor' && (
+                                                <div className="flex items-center">
+                                                  <i className="fa-solid fa-tag w-4 text-gray-400 mr-2"></i>
+                                                  <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Type:</span>
+                                                  <span className="text-sm font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-700" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                                    {visitor.visitorType}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              {visitor.institution && (
+                                                <div className="flex items-center">
+                                                  <i className="fa-solid fa-building w-4 text-gray-400 mr-2"></i>
+                                                  <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Institution:</span>
+                                                  <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                                    {visitor.institution}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              {visitor.address && (
+                                                <div className="flex items-center">
+                                                  <i className="fa-solid fa-map-marker-alt w-4 text-gray-400 mr-2"></i>
+                                                  <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Address:</span>
+                                                  <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                                    {visitor.address}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              {visitor.purposeOfVisit && (
+                                                <div className="flex items-center">
+                                                  <i className="fa-solid fa-bullseye w-4 text-gray-400 mr-2"></i>
+                                                  <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Purpose:</span>
+                                                  <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                                    {visitor.purposeOfVisit}
+                                                  </span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                          ))}
+                                          
+                                          {/* Pagination Controls */}
+                                          {additionalVisitorsData[booking.booking_id || index].length > visitorsPerPage && (
+                                            <div className="col-span-full flex items-center justify-between mt-4 p-3 bg-gray-50 rounded-lg">
+                                              <div className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                                Showing {((visitorPages[booking.booking_id || index] || 0) * visitorsPerPage) + 1} to {Math.min(((visitorPages[booking.booking_id || index] || 0) + 1) * visitorsPerPage, additionalVisitorsData[booking.booking_id || index].length)} of {additionalVisitorsData[booking.booking_id || index].length} additional visitors
+                                              </div>
+                                              <div className="flex items-center space-x-2">
+                                                <button
+                                                  onClick={() => goToVisitorPage(booking.booking_id || index, (visitorPages[booking.booking_id || index] || 0) - 1)}
+                                                  disabled={(visitorPages[booking.booking_id || index] || 0) === 0}
+                                                  className="px-3 py-1 rounded-lg border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                  style={{color: '#351E10', borderColor: '#351E10', fontFamily: 'Telegraph, sans-serif'}}
+                                                >
+                                                  <i className="fa-solid fa-chevron-left mr-1"></i>
+                                                  Previous
+                                                </button>
+                                                <span className="text-sm px-2" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                                  Page {(visitorPages[booking.booking_id || index] || 0) + 1} of {getTotalPages(booking.booking_id || index, additionalVisitorsData[booking.booking_id || index])}
+                                                </span>
+                                                <button
+                                                  onClick={() => goToVisitorPage(booking.booking_id || index, (visitorPages[booking.booking_id || index] || 0) + 1)}
+                                                  disabled={(visitorPages[booking.booking_id || index] || 0) >= getTotalPages(booking.booking_id || index, additionalVisitorsData[booking.booking_id || index]) - 1}
+                                                  className="px-3 py-1 rounded-lg border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                  style={{color: '#351E10', borderColor: '#351E10', fontFamily: 'Telegraph, sans-serif'}}
+                                                >
+                                                  Next
+                                                  <i className="fa-solid fa-chevron-right ml-1"></i>
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <div className="text-sm text-gray-500" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                          Loading additional visitors...
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
 
               {/* Mobile Card View */}
-              <div className="block md:hidden space-y-4 p-2">
-                <div className="text-xs text-gray-500 mb-2 font-['Telegraph']">Mobile View Active (425px detected)</div>
+              <div className="block md:hidden space-y-3 p-2">
+                <div className="text-xs text-gray-500 mb-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Mobile View Active (425px detected)</div>
                 {filteredBookings.map((booking, index) => (
-                  <div key={booking.booking_id || index} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                    {/* Header */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center space-x-2">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full font-['Telegraph'] ${
+                  <div key={booking.booking_id || index} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                    {/* Header - Compact */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-1">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                           booking.type === 'group' 
                             ? 'bg-purple-100 text-purple-800' 
                             : booking.type === 'individual'
@@ -977,59 +1490,261 @@ const Schedule = () => {
                             : booking.type === 'group-walkin'
                             ? 'bg-red-100 text-red-800'
                             : 'bg-gray-100 text-gray-800'
-                        }`}>
+                        }`} style={{fontFamily: 'Telegraph, sans-serif'}}>
                           {booking.type}
                         </span>
                         <span className={getStatusBadge(booking.status)}>
                           {getDisplayStatus(booking.status)}
                         </span>
                       </div>
-                      <div className="flex items-center text-sm text-[#2e2b41] font-['Telegraph']">
-                        <i className="fa-solid fa-users mr-1 text-[#AB8841]"></i>
+                      <div className="flex items-center text-xs" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                        <i className="fa-solid fa-users mr-1" style={{color: '#E5B80B'}}></i>
                         {booking.total_visitors}
                       </div>
                     </div>
 
-                    {/* Visitor Info */}
-                    <div className="mb-3">
-                      <h3 className="text-lg font-semibold text-[#2e2b41] font-['Lora']">
+                    {/* Visitor Info - Compact */}
+                    <div className="mb-2">
+                      <h3 className="text-base font-semibold" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                         {booking.first_name} {booking.last_name}
                       </h3>
-                      <p className="text-sm text-gray-600 font-['Telegraph']">
-                        Created: {formatDate(booking.created_at)}
-                      </p>
-                    </div>
-
-                    {/* Date & Time */}
-                    <div className="mb-4">
-                      <div className="flex items-center text-sm text-[#2e2b41] font-['Telegraph']">
-                        <i className="fa-solid fa-calendar mr-2 text-[#AB8841]"></i>
-                        {formatDate(booking.date)} at {booking.time_slot}
+                      <div className="flex items-center justify-between text-xs text-gray-600" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                        <span>Created: {formatDate(booking.created_at)}</span>
+                        <div className="flex items-center">
+                          <i className="fa-solid fa-calendar mr-1" style={{color: '#E5B80B'}}></i>
+                          {formatDate(booking.date)} at {booking.time_slot}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Actions */}
+
+                    {/* Expandable Details */}
+                    {expandedBookings.has(booking.booking_id || index) && (
+                      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <div className="space-y-4">
+                          {/* Booking Visitors Section */}
+                          <div>
+                            <div className="flex items-center justify-between mb-4">
+                              <h4 className="text-lg font-semibold" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                <i className="fa-solid fa-users mr-2" style={{color: '#E5B80B'}}></i>
+                                Booking Visitors
+                              </h4>
+                              <div className="text-sm font-mono px-3 py-1 rounded-lg" style={{backgroundColor: '#E5B80B', color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                #{booking.booking_id}
+                              </div>
+                            </div>
+                            <div className="space-y-3">
+                              {/* Primary Visitor */}
+                              <div className="bg-gradient-to-br from-white to-gray-50 p-4 rounded-xl border-2 border-gray-200 shadow-sm">
+                                <div className="flex items-center justify-between mb-3">
+                                  <h5 className="font-semibold text-lg" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                    {booking.first_name} {booking.last_name}
+                                  </h5>
+                                  <span className="inline-flex px-3 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                    <i className="fa-solid fa-crown mr-1"></i>
+                                    Primary
+                                  </span>
+                                </div>
+                                <div className="space-y-2">
+                                  <div className="flex items-center">
+                                    <i className="fa-solid fa-envelope w-4 text-gray-400 mr-2"></i>
+                                    <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Email:</span>
+                                    <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                      {booking.email || 'Not provided'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <i className="fa-solid fa-user w-4 text-gray-400 mr-2"></i>
+                                    <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Gender:</span>
+                                    <span className="text-sm capitalize" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                      {booking.gender || 'Not specified'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <i className="fa-solid fa-tag w-4 text-gray-400 mr-2"></i>
+                                    <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Type:</span>
+                                    <span className="text-sm font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-700" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                      {booking.type}
+                                    </span>
+                                  </div>
+                                  {booking.institution && (
+                                    <div className="flex items-center">
+                                      <i className="fa-solid fa-building w-4 text-gray-400 mr-2"></i>
+                                      <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Institution:</span>
+                                      <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                        {booking.institution}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {booking.address && (
+                                    <div className="flex items-center">
+                                      <i className="fa-solid fa-map-marker-alt w-4 text-gray-400 mr-2"></i>
+                                      <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Address:</span>
+                                      <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                        {booking.address}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {booking.purpose_of_visit && (
+                                    <div className="flex items-center">
+                                      <i className="fa-solid fa-bullseye w-4 text-gray-400 mr-2"></i>
+                                      <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Purpose:</span>
+                                      <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                        {booking.purpose_of_visit}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                    </div>
+
+                              {/* Additional Visitors if any */}
+                              {booking.total_visitors > 1 && (
+                                additionalVisitorsData[booking.booking_id || index] ? (
+                                  <>
+                                    {getPaginatedVisitors(booking.booking_id || index, additionalVisitorsData[booking.booking_id || index]).map((visitor, visitorIndex) => (
+                                    <div key={visitorIndex} className="bg-gradient-to-br from-white to-gray-50 p-4 rounded-xl border-2 border-gray-200 shadow-sm">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <h5 className="font-semibold text-lg" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                          {visitor.firstName} {visitor.lastName}
+                                        </h5>
+                                        <span className="inline-flex px-3 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-800 border border-purple-200" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                          <i className="fa-solid fa-user-plus mr-1"></i>
+                                          Additional
+                                        </span>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <div className="flex items-center">
+                                          <i className="fa-solid fa-envelope w-4 text-gray-400 mr-2"></i>
+                                          <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Email:</span>
+                                          <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                            {visitor.email || 'Not provided'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <i className="fa-solid fa-user w-4 text-gray-400 mr-2"></i>
+                                          <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Gender:</span>
+                                          <span className="text-sm capitalize" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                            {visitor.gender || 'Not specified'}
+                                          </span>
+                                        </div>
+                                        {visitor.visitorType && visitor.visitorType !== 'Visitor' && (
+                                          <div className="flex items-center">
+                                            <i className="fa-solid fa-tag w-4 text-gray-400 mr-2"></i>
+                                            <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Type:</span>
+                                            <span className="text-sm font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-700" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                              {visitor.visitorType}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {visitor.institution && (
+                                          <div className="flex items-center">
+                                            <i className="fa-solid fa-building w-4 text-gray-400 mr-2"></i>
+                                            <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Institution:</span>
+                                            <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                              {visitor.institution}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {visitor.address && (
+                                          <div className="flex items-center">
+                                            <i className="fa-solid fa-map-marker-alt w-4 text-gray-400 mr-2"></i>
+                                            <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Address:</span>
+                                            <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                              {visitor.address}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {visitor.purposeOfVisit && (
+                                          <div className="flex items-center">
+                                            <i className="fa-solid fa-bullseye w-4 text-gray-400 mr-2"></i>
+                                            <span className="text-sm font-medium text-gray-600 mr-2" style={{fontFamily: 'Telegraph, sans-serif'}}>Purpose:</span>
+                                            <span className="text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                              {visitor.purposeOfVisit}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    ))}
+                                    
+                                    {/* Pagination Controls - Mobile */}
+                                    {additionalVisitorsData[booking.booking_id || index].length > visitorsPerPage && (
+                                      <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                                        <div className="text-sm mb-3 text-center" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                          Showing {((visitorPages[booking.booking_id || index] || 0) * visitorsPerPage) + 1} to {Math.min(((visitorPages[booking.booking_id || index] || 0) + 1) * visitorsPerPage, additionalVisitorsData[booking.booking_id || index].length)} of {additionalVisitorsData[booking.booking_id || index].length} additional visitors
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                          <button
+                                            onClick={() => goToVisitorPage(booking.booking_id || index, (visitorPages[booking.booking_id || index] || 0) - 1)}
+                                            disabled={(visitorPages[booking.booking_id || index] || 0) === 0}
+                                            className="px-3 py-1 rounded-lg border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                            style={{color: '#351E10', borderColor: '#351E10', fontFamily: 'Telegraph, sans-serif'}}
+                                          >
+                                            <i className="fa-solid fa-chevron-left mr-1"></i>
+                                            Previous
+                                          </button>
+                                          <span className="text-sm px-2" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                                            Page {(visitorPages[booking.booking_id || index] || 0) + 1} of {getTotalPages(booking.booking_id || index, additionalVisitorsData[booking.booking_id || index])}
+                                          </span>
+                                          <button
+                                            onClick={() => goToVisitorPage(booking.booking_id || index, (visitorPages[booking.booking_id || index] || 0) + 1)}
+                                            disabled={(visitorPages[booking.booking_id || index] || 0) >= getTotalPages(booking.booking_id || index, additionalVisitorsData[booking.booking_id || index]) - 1}
+                                            className="px-3 py-1 rounded-lg border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                            style={{color: '#351E10', borderColor: '#351E10', fontFamily: 'Telegraph, sans-serif'}}
+                                          >
+                                            Next
+                                            <i className="fa-solid fa-chevron-right ml-1"></i>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="text-sm text-gray-500" style={{fontFamily: 'Telegraph, sans-serif'}}>
+                                    Loading additional visitors...
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions - Compact */}
                     {!showArchive && (
-                      <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
                         <button 
-                          className="text-blue-600 hover:text-blue-800 transition-colors duration-150 text-sm font-['Telegraph'] flex items-center"
-                          onClick={() => handleViewBooking(booking)}
+                          onClick={() => toggleBookingDetails(booking.booking_id || index, booking)}
+                          className={`px-2 py-1 rounded border transition-all duration-200 hover:shadow-md text-xs flex items-center ${
+                            expandedBookings.has(booking.booking_id || index) 
+                              ? 'shadow-md' 
+                              : 'hover:shadow-sm'
+                          }`}
+                          style={{
+                            color: expandedBookings.has(booking.booking_id || index) ? '#FFFFFF' : '#351E10',
+                            backgroundColor: expandedBookings.has(booking.booking_id || index) ? '#351E10' : 'transparent',
+                            borderColor: '#351E10', 
+                            fontFamily: 'Telegraph, sans-serif'
+                          }}
                         >
-                          <i className="fa-solid fa-eye mr-1"></i>
-                          View
+                          <i className={`fa-solid fa-chevron-${expandedBookings.has(booking.booking_id || index) ? 'up' : 'down'} mr-1`}></i>
+                          {expandedBookings.has(booking.booking_id || index) ? 'Hide' : 'Show'}
                         </button>
                         {booking.status !== 'cancelled' && (
                           <button 
-                            className="text-orange-600 hover:text-orange-800 transition-colors duration-150 text-sm font-['Telegraph'] flex items-center"
+                            className="px-2 py-1 rounded font-medium transition-all duration-200 hover:shadow-md text-xs flex items-center"
+                            style={{backgroundColor: '#F59E0B', color: '#FFFFFF', fontFamily: 'Telegraph, sans-serif'}}
                             onClick={() => handleCancelBooking(booking)}
                           >
-                            <i className="fa-solid fa-times mr-1"></i>
+                            <i className="fa-solid fa-ban mr-1"></i>
                             Cancel
                           </button>
                         )}
                         {booking.status === 'pending' && (
                           <button
-                            className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition-colors duration-150 text-sm font-['Telegraph'] flex items-center"
+                            className="px-2 py-1 rounded font-medium transition-all duration-200 hover:shadow-md text-xs flex items-center"
+                            style={{backgroundColor: '#10B981', color: '#FFFFFF', fontFamily: 'Telegraph, sans-serif'}}
                             onClick={() => handleApproveBooking(booking)}
                           >
                             <i className="fa-solid fa-check mr-1"></i>
@@ -1037,7 +1752,8 @@ const Schedule = () => {
                           </button>
                         )}
                         <button 
-                          className="text-red-600 hover:text-red-800 transition-colors duration-150 text-sm font-['Telegraph'] flex items-center"
+                          className="px-2 py-1 rounded font-medium transition-all duration-200 hover:shadow-md text-xs flex items-center"
+                          style={{backgroundColor: '#EF4444', color: '#FFFFFF', fontFamily: 'Telegraph, sans-serif'}}
                           onClick={() => deleteSchedule(booking.booking_id)}
                         >
                           <i className="fa-solid fa-trash mr-1"></i>
@@ -1074,11 +1790,11 @@ const Schedule = () => {
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div>
-                <h2 className="text-2xl font-bold text-[#2e2b41] font-['Lora']">
-                  <i className="fa-solid fa-calendar-check mr-3 text-[#AB8841]"></i>
+                <h2 className="text-2xl font-bold" style={{color: '#E5B80B', fontFamily: 'Telegraph, sans-serif'}}>
+                  <i className="fa-solid fa-calendar-check mr-3" style={{color: '#E5B80B'}}></i>
                   Booking Details
                 </h2>
-                <p className="text-gray-600 mt-1 font-['Telegraph']">
+                <p className="mt-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                   {selectedBooking.first_name} {selectedBooking.last_name}
                 </p>
               </div>
@@ -1100,7 +1816,7 @@ const Schedule = () => {
               {/* Status Badge */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full font-['Telegraph'] ${
+                  <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
                     selectedBooking.type === 'group' 
                       ? 'bg-purple-100 text-purple-800' 
                       : selectedBooking.type === 'individual'
@@ -1110,43 +1826,43 @@ const Schedule = () => {
                       : selectedBooking.type === 'group-walkin'
                       ? 'bg-red-100 text-red-800'
                       : 'bg-gray-100 text-gray-800'
-                  }`}>
+                  }`} style={{fontFamily: 'Telegraph, sans-serif'}}>
                     {selectedBooking.type}
                   </span>
                   <span className={getStatusBadge(selectedBooking.status)}>
                     {getDisplayStatus(selectedBooking.status)}
                   </span>
                 </div>
-                <div className="flex items-center text-sm text-[#2e2b41] font-['Telegraph']">
-                  <i className="fa-solid fa-users mr-2 text-[#AB8841]"></i>
+                <div className="flex items-center text-sm" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                  <i className="fa-solid fa-users mr-2" style={{color: '#E5B80B'}}></i>
                   {selectedBooking.total_visitors} {selectedBooking.total_visitors === 1 ? 'visitor' : 'visitors'}
                 </div>
               </div>
 
               {/* Visitor Information */}
               <div className="bg-blue-50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-[#2e2b41] mb-3 font-['Lora']">
-                  <i className="fa-solid fa-user mr-2 text-[#AB8841]"></i>
+                <h3 className="text-lg font-semibold mb-3" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                  <i className="fa-solid fa-user mr-2" style={{color: '#E5B80B'}}></i>
                   Visitor Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Full Name</label>
-                    <p className="text-[#2e2b41] font-['Telegraph']">{selectedBooking.first_name} {selectedBooking.last_name}</p>
+                    <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Full Name</label>
+                    <p style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{selectedBooking.first_name} {selectedBooking.last_name}</p>
                   </div>
                   {bookingDetails && (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Gender</label>
-                        <p className="text-[#2e2b41] font-['Telegraph']">{bookingDetails.gender || 'Not specified'}</p>
+                        <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Gender</label>
+                        <p style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{bookingDetails.gender || 'Not specified'}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Email</label>
-                        <p className="text-[#2e2b41] font-['Telegraph']">{bookingDetails.email || 'Not provided'}</p>
+                        <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Email</label>
+                        <p style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{bookingDetails.email || 'Not provided'}</p>
                       </div>
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Address</label>
-                        <p className="text-[#2e2b41] font-['Telegraph']">{bookingDetails.address || 'Not provided'}</p>
+                        <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Address</label>
+                        <p style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{bookingDetails.address || 'Not provided'}</p>
                       </div>
                     </>
                   )}
@@ -1155,26 +1871,26 @@ const Schedule = () => {
 
               {/* Booking Information */}
               <div className="bg-green-50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-[#2e2b41] mb-3 font-['Lora']">
-                  <i className="fa-solid fa-calendar-alt mr-2 text-[#AB8841]"></i>
+                <h3 className="text-lg font-semibold mb-3" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                  <i className="fa-solid fa-calendar-alt mr-2" style={{color: '#E5B80B'}}></i>
                   Booking Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Booking ID</label>
-                    <p className="text-[#2e2b41] font-['Telegraph'] font-mono">#{selectedBooking.booking_id}</p>
+                    <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Booking ID</label>
+                    <p className="font-mono" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>#{selectedBooking.booking_id}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Visit Date</label>
-                    <p className="text-[#2e2b41] font-['Telegraph']">{formatDate(selectedBooking.date)}</p>
+                    <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Visit Date</label>
+                    <p style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{formatDate(selectedBooking.date)}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Time Slot</label>
-                    <p className="text-[#2e2b41] font-['Telegraph']">{selectedBooking.time_slot}</p>
+                    <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Time Slot</label>
+                    <p style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{selectedBooking.time_slot}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Created On</label>
-                    <p className="text-[#2e2b41] font-['Telegraph']">{formatDate(selectedBooking.created_at)}</p>
+                    <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Created On</label>
+                    <p style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{formatDate(selectedBooking.created_at)}</p>
                   </div>
                 </div>
               </div>
@@ -1182,19 +1898,19 @@ const Schedule = () => {
               {/* Additional Information */}
               {bookingDetails && (
                 <div className="bg-yellow-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-[#2e2b41] mb-3 font-['Lora']">
-                    <i className="fa-solid fa-info-circle mr-2 text-[#AB8841]"></i>
+                <h3 className="text-lg font-semibold mb-3" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                  <i className="fa-solid fa-info-circle mr-2" style={{color: '#E5B80B'}}></i>
                     Additional Information
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Visitor Type</label>
-                      <p className="text-[#2e2b41] font-['Telegraph']">{bookingDetails.visitorType || 'Not specified'}</p>
+                      <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Visitor Type</label>
+                      <p style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{bookingDetails.visitorType || 'Not specified'}</p>
                     </div>
                     {selectedBooking.institution && (
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 font-['Telegraph']">Institution</label>
-                        <p className="text-[#2e2b41] font-['Telegraph']">{selectedBooking.institution}</p>
+                        <label className="block text-sm font-medium mb-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>Institution</label>
+                        <p style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{selectedBooking.institution}</p>
                       </div>
                     )}
                   </div>
@@ -1207,17 +1923,17 @@ const Schedule = () => {
               {console.log('🔍 Selected booking:', selectedBooking)}
               {(modalVisitors.length > 0 || (selectedBooking?.total_visitors && selectedBooking.total_visitors > 1)) && (
                 <div className="bg-purple-50 rounded-lg p-4">
-                                      <h3 className="text-lg font-semibold text-[#2e2b41] mb-3 font-['Lora']">
-                      <i className="fa-solid fa-users mr-2 text-[#AB8841]"></i>
+                                      <h3 className="text-lg font-semibold mb-3" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
+                      <i className="fa-solid fa-users mr-2" style={{color: '#E5B80B'}}></i>
                       All Visitors ({modalVisitors.length})
                     </h3>
                     {modalVisitors.length === 0 && (
                       <div className="space-y-2 mb-4">
-                        <p className="text-gray-600 font-['Telegraph']">No visitors found in database.</p>
-                        <p className="text-sm text-gray-500 font-['Telegraph']">
+                        <p className="text-gray-600" style={{fontFamily: 'Telegraph, sans-serif'}}>No visitors found in database.</p>
+                        <p className="text-sm text-gray-500" style={{fontFamily: 'Telegraph, sans-serif'}}>
                           Expected: {selectedBooking?.total_visitors || 'Unknown'} total visitors
                         </p>
-                        <p className="text-xs text-gray-400 font-['Telegraph']">
+                        <p className="text-xs text-gray-400" style={{fontFamily: 'Telegraph, sans-serif'}}>
                           Booking ID: {selectedBooking?.booking_id} | Type: {selectedBooking?.type}
                         </p>
                       </div>
@@ -1227,27 +1943,27 @@ const Schedule = () => {
                                               <div key={visitor.visitorId || visitor.tokenId || index} className="bg-white rounded-lg p-3 border border-purple-200">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center space-x-2">
-                              <h4 className="font-semibold text-[#2e2b41] font-['Lora']">
+                              <h4 className="font-semibold" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>
                                 {visitor.firstName} {visitor.lastName}
                               </h4>
                               {visitor.isMainVisitor && (
-                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 font-['Telegraph']">
+                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800" style={{fontFamily: 'Telegraph, sans-serif'}}>
                                   Primary
                                 </span>
                               )}
                             </div>
                             <div className="flex items-center space-x-2">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full font-['Telegraph'] ${
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                 visitor.status === 'checked-in' || visitor.status === 'visited'
                                   ? 'bg-green-100 text-green-800' 
                                   : visitor.status === 'pending'
                                   ? 'bg-yellow-100 text-yellow-800'
                                   : 'bg-gray-100 text-gray-800'
-                              }`}>
+                              }`} style={{fontFamily: 'Telegraph, sans-serif'}}>
                                 {visitor.status === 'checked-in' || visitor.status === 'visited' ? 'Checked In' : visitor.status === 'pending' ? 'Pending' : visitor.status}
                               </span>
                               {visitor.checkinTime && (
-                                <span className="text-xs text-gray-500 font-['Telegraph']">
+                                <span className="text-xs text-gray-500" style={{fontFamily: 'Telegraph, sans-serif'}}>
                                   <i className="fa-solid fa-clock mr-1"></i>
                                   {new Date(visitor.checkinTime).toLocaleTimeString()}
                                 </span>
@@ -1256,31 +1972,31 @@ const Schedule = () => {
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                             <div>
-                              <span className="text-gray-600 font-['Telegraph']">Email:</span>
-                              <span className="ml-1 text-[#2e2b41] font-['Telegraph']">{visitor.email || 'Not provided'}</span>
+                              <span className="text-gray-600" style={{fontFamily: 'Telegraph, sans-serif'}}>Email:</span>
+                              <span className="ml-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{visitor.email || 'Not provided'}</span>
                             </div>
                             {visitor.gender && visitor.gender !== 'Not specified' && (
                               <div>
-                                <span className="text-gray-600 font-['Telegraph']">Gender:</span>
-                                <span className="ml-1 text-[#2e2b41] font-['Telegraph']">{visitor.gender}</span>
+                                <span className="text-gray-600" style={{fontFamily: 'Telegraph, sans-serif'}}>Gender:</span>
+                                <span className="ml-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{visitor.gender}</span>
                               </div>
                             )}
                             {visitor.visitorType && visitor.visitorType !== 'Visitor' && (
                               <div>
-                                <span className="text-gray-600 font-['Telegraph']">Type:</span>
-                                <span className="ml-1 text-[#2e2b41] font-['Telegraph']">{visitor.visitorType}</span>
+                                <span className="text-gray-600" style={{fontFamily: 'Telegraph, sans-serif'}}>Type:</span>
+                                <span className="ml-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{visitor.visitorType}</span>
                               </div>
                             )}
                             {visitor.institution && visitor.institution !== 'Not specified' && (
                               <div>
-                                <span className="text-gray-600 font-['Telegraph']">Institution:</span>
-                                <span className="ml-1 text-[#2e2b41] font-['Telegraph']">{visitor.institution}</span>
+                                <span className="text-gray-600" style={{fontFamily: 'Telegraph, sans-serif'}}>Institution:</span>
+                                <span className="ml-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{visitor.institution}</span>
                               </div>
                             )}
                             {visitor.address && visitor.address !== 'Not provided' && (
                               <div className="sm:col-span-2">
-                                <span className="text-gray-600 font-['Telegraph']">Address:</span>
-                                <span className="ml-1 text-[#2e2b41] font-['Telegraph']">{visitor.address}</span>
+                                <span className="text-gray-600" style={{fontFamily: 'Telegraph, sans-serif'}}>Address:</span>
+                                <span className="ml-1" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{visitor.address}</span>
                               </div>
                             )}
                           </div>
@@ -1300,7 +2016,8 @@ const Schedule = () => {
                   setBookingDetails(null);
                   setModalVisitors([]);
                 }}
-                className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-['Telegraph']"
+                className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                style={{fontFamily: 'Telegraph, sans-serif'}}
               >
                 Close
               </button>
@@ -1313,12 +2030,107 @@ const Schedule = () => {
                     setBookingDetails(null);
                     setModalVisitors([]);
                   }}
-                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-['Telegraph']"
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  style={{fontFamily: 'Telegraph, sans-serif'}}
                 >
                   <i className="fa-solid fa-check mr-2"></i>
                   Approve Booking
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Notification */}
+      {notification.show && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100 opacity-100 border-l-4" style={{borderLeftColor: notification.type === 'success' ? '#10B981' : notification.type === 'error' ? '#EF4444' : '#3B82F6'}}>
+            {/* Notification Icon */}
+            <div className="flex justify-center pt-8 pb-4">
+              <div 
+                className="w-20 h-20 rounded-full flex items-center justify-center"
+                style={{
+                  background: notification.type === 'success' 
+                    ? 'linear-gradient(135deg, #10B981, #059669)'
+                    : notification.type === 'error'
+                    ? 'linear-gradient(135deg, #EF4444, #DC2626)'
+                    : 'linear-gradient(135deg, #3B82F6, #2563EB)'
+                }}
+              >
+                <i className={`fa-solid ${notification.type === 'success' ? 'fa-check' : notification.type === 'error' ? 'fa-times' : 'fa-info'} text-3xl text-white`}></i>
+              </div>
+            </div>
+            
+            {/* Notification Message */}
+            <div className="px-8 pb-8 text-center">
+              <h3 className="text-2xl font-bold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                {notification.title}
+              </h3>
+              <p className="text-gray-600 text-lg mb-2" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                {notification.message}
+              </p>
+              {notification.description && (
+                <p className="text-sm text-gray-500" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                  {notification.description}
+                </p>
+              )}
+            </div>
+            
+            {/* Close Button */}
+            <div className="px-8 pb-8">
+              <button
+                onClick={() => setNotification({...notification, show: false})}
+                className="w-full py-3 px-6 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg"
+                style={{background: 'linear-gradient(135deg, #8B6B21 0%, #D4AF37 100%)', color: 'white', fontFamily: 'Telegraf, sans-serif'}}
+              >
+                <i className="fa-solid fa-check mr-2"></i>
+                Got it!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      {confirmationModal.show && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100 opacity-100 border-l-4 border-orange-500">
+            {/* Confirmation Icon */}
+            <div className="flex justify-center pt-8 pb-4">
+              <div className="w-20 h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-orange-400 to-orange-600">
+                <i className="fa-solid fa-question text-3xl text-white"></i>
+              </div>
+            </div>
+            
+            {/* Confirmation Message */}
+            <div className="px-8 pb-8 text-center">
+              <h3 className="text-2xl font-bold mb-2" style={{color: '#351E10', fontFamily: 'Telegraf, sans-serif'}}>
+                {confirmationModal.title}
+              </h3>
+              <p className="text-gray-600 text-lg mb-2" style={{fontFamily: 'Telegraf, sans-serif'}}>
+                {confirmationModal.message}
+              </p>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="px-8 pb-8 flex gap-4">
+              <button
+                onClick={confirmationModal.onCancel}
+                className="flex-1 py-3 px-6 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-100"
+                style={{fontFamily: 'Telegraf, sans-serif'}}
+              >
+                <i className="fa-solid fa-times mr-2"></i>
+                Cancel
+              </button>
+              <button
+                onClick={confirmationModal.onConfirm}
+                className="flex-1 py-3 px-6 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg"
+                style={{background: 'linear-gradient(135deg, #8B6B21 0%, #D4AF37 100%)', color: 'white', fontFamily: 'Telegraf, sans-serif'}}
+              >
+                <i className="fa-solid fa-check mr-2"></i>
+                Confirm
+              </button>
             </div>
           </div>
         </div>
@@ -1330,16 +2142,16 @@ const Schedule = () => {
 // Reusable Input
 const Input = ({ label, className = "", ...props }) => (
   <div className={className}>
-    <label className="block text-[#2e2b41] font-semibold mb-2">{label}</label>
-    <input {...props} className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]" />
+    <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{label}</label>
+    <input {...props} className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent" style={{fontFamily: 'Telegraph, sans-serif', focusRingColor: '#E5B80B'}} />
   </div>
 );
 
 // Reusable Select
 const Select = ({ label, options, className = "", placeholder, ...props }) => (
   <div className={className}>
-    <label className="block text-[#2e2b41] font-semibold mb-2">{label}</label>
-    <select {...props} className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]">
+    <label className="block font-semibold mb-2" style={{color: '#351E10', fontFamily: 'Telegraph, sans-serif'}}>{label}</label>
+    <select {...props} className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent" style={{fontFamily: 'Telegraph, sans-serif', focusRingColor: '#E5B80B'}}>
       <option value="">{placeholder || `Select ${label}`}</option>
       {options.map((opt, idx) => (
         <option key={idx} value={opt}>{opt}</option>

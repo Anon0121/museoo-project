@@ -5,7 +5,7 @@ const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'museoo_db',
+  database: process.env.DB_NAME || 'museosmart',
   port: process.env.DB_PORT || 3306
 };
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import '@fortawesome/fontawesome-free/css/all.min.css';
 
@@ -20,6 +20,7 @@ import AdditionalVisitorForm from "./components/visitor/AdditionalVisitorForm";
 import WalkInVisitorForm from "./components/visitor/WalkInVisitorForm";
 import GroupWalkInLeaderForm from "./components/visitor/GroupWalkInLeaderForm";
 import GroupWalkInMemberForm from "./components/visitor/GroupWalkInMemberForm";
+import GroupWalkInVisitorForm from "./components/visitor/GroupWalkInVisitorForm";
 
 
 
@@ -30,17 +31,37 @@ import SignupForm from "./components/auth/SignupForm";
 import AdminDashboard from "./components/admin/AdminDashboard";
 
 function App() {
+  const [isExhibitModalOpen, setIsExhibitModalOpen] = useState(false);
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [isEventRegistrationModalOpen, setIsEventRegistrationModalOpen] = useState(false);
+
+  // Prevent body scrolling when any modal is open
+  React.useEffect(() => {
+    if (isExhibitModalOpen || isEventModalOpen || isEventRegistrationModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isExhibitModalOpen, isEventModalOpen, isEventRegistrationModalOpen]);
+
   return (
     <Routes>
       <Route
         path="/"
         element={
           <>
-            <Header />
-            <About />
-            <Promotional />
-            <Exhibits />
-            <Events />
+                        <Header isModalOpen={isExhibitModalOpen || isEventModalOpen || isEventRegistrationModalOpen} />
+            <div className={`${isExhibitModalOpen || isEventModalOpen || isEventRegistrationModalOpen ? 'fixed inset-0 overflow-hidden' : ''}`}>
+              <About />
+              <Promotional />
+              <Exhibits onModalStateChange={setIsExhibitModalOpen} />
+              <Events isModalOpen={isEventModalOpen} onModalStateChange={setIsEventModalOpen} onEventRegistrationModalChange={setIsEventRegistrationModalOpen} />
+            </div>
             <Contact />
             <Footer />
           </>
@@ -54,6 +75,7 @@ function App() {
       <Route path="/walkin-visitor" element={<WalkInVisitorForm />} />
       <Route path="/group-walkin-leader" element={<GroupWalkInLeaderForm />} />
       <Route path="/group-walkin-member" element={<GroupWalkInMemberForm />} />
+      <Route path="/group-walkin-visitor" element={<GroupWalkInVisitorForm />} />
 
       
       <Route path="/login" element={<LoginForm />} />

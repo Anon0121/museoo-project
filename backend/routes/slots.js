@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const router = express.Router();
 const { logActivity } = require('../utils/activityLogger');
+const { authenticateToken } = require('../middleware/auth');
 const QRCode = require('qrcode');
 const nodemailer = require('nodemailer');
 
@@ -203,36 +204,31 @@ router.post('/book', async (req, res) => {
     );
     const bookingId = bookingResult.insertId;
 
-    // Insert main visitor with complete information (skip for group-walkin as they'll fill details later)
+    // Insert main visitor with complete information
     let mainVisitorId = null;
-    if (type !== 'group-walkin') {
-      const visitorStatus = (type === 'individual walk-in' || type === 'group walk-in') ? 'approved' : 'pending';
-      const [mainVisitorResult] = await conn.query(
-        `INSERT INTO visitors (booking_id, first_name, last_name, gender, address, email, visitor_type, purpose, institution, status, is_main_visitor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)`,
-                [bookingId, mainVisitor.firstName, mainVisitor.lastName, mainVisitor.gender || '', mainVisitor.address || '', mainVisitor.email, mainVisitor.visitorType || 'local', mainVisitor.purpose || 'other', mainVisitor.institution || null, visitorStatus]
-      );
-      mainVisitorId = mainVisitorResult.insertId;
-    }
+    const visitorStatus = (type === 'individual-walkin' || type === 'group-walkin') ? 'approved' : 'pending';
+    const [mainVisitorResult] = await conn.query(
+      `INSERT INTO visitors (booking_id, first_name, last_name, gender, address, email, visitor_type, purpose, institution, status, is_main_visitor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)`,
+      [bookingId, mainVisitor.firstName, mainVisitor.lastName, mainVisitor.gender || '', mainVisitor.address || '', mainVisitor.email, mainVisitor.visitorType || 'local', mainVisitor.purpose || 'other', mainVisitor.institution || null, visitorStatus]
+    );
+    mainVisitorId = mainVisitorResult.insertId;
 
-    // Handle group members (additional visitors)
+    // Handle group members (additional visitors) - insert directly into visitors table
     let companionTokens = [];
     const membersToProcess = groupMembers || companions || [];
     
-    if ((type === 'group' || type === 'group walk-in') && Array.isArray(membersToProcess)) {
+    if ((type === 'group' || type === 'group-walkin') && Array.isArray(membersToProcess)) {
       for (let i = 0; i < membersToProcess.length; i++) {
         const member = membersToProcess[i];
         
-        // Generate unique token
-        const tokenId = `ADD-BOOK${bookingId}-${i + 1}`;
-        
-        // Insert companion token record
-        await conn.query(
-          `INSERT INTO additional_visitors (token_id, booking_id, email) VALUES (?, ?, ?)`,
-          [tokenId, bookingId, member.email]
+        // Insert group member directly into visitors table
+        const [memberResult] = await conn.query(
+          `INSERT INTO visitors (booking_id, first_name, last_name, gender, address, email, visitor_type, purpose, institution, status, is_main_visitor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false)`,
+          [bookingId, member.firstName || '', member.lastName || '', member.gender || '', member.address || '', member.email, member.visitorType || 'local', member.purpose || 'other', member.institution || null, visitorStatus]
         );
         
         companionTokens.push({
-          tokenId,
+          visitorId: memberResult.insertId,
           email: member.email
         });
       }
@@ -244,40 +240,20 @@ router.post('/book', async (req, res) => {
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 24);
       
-      if (type === 'walk-in scheduling' || type === 'ind-walkin') {
-        // Individual walk-in - create token for main visitor
-        const walkInTokenId = type === 'walk-in scheduling' ? `WALKIN-${bookingId}` : `INDWALKIN-${bookingId}`;
-        
-        // Insert walk-in visitor token record with expiration
-        await conn.query(
-          `INSERT INTO additional_visitors (token_id, booking_id, email, expires_at) VALUES (?, ?, ?, ?)`,
-          [walkInTokenId, bookingId, mainVisitor.email, expiresAt]
-        );
-        
-        companionTokens.push({
-          tokenId: walkInTokenId,
-          email: mainVisitor.email
-        });
+      if (type === 'walk-in scheduling') {
+        // Walk-in scheduling - create visitor record directly in visitors table
+        // No need for tokens since it's a direct walk-in
+        console.log('✅ Walk-in scheduling: Visitor record already created in visitors table');
       } else if (type === 'group-walkin') {
-        // Group walk-in - create tokens for all visitors with expiration (including main visitor)
-        
-        // Create token for main visitor
-        const mainVisitorTokenId = `GROUPWALKIN-${bookingId}-0`;
-        await conn.query(
-          `INSERT INTO additional_visitors (token_id, booking_id, email, expires_at) VALUES (?, ?, ?, ?)`,
-          [mainVisitorTokenId, bookingId, mainVisitor.email, expiresAt]
-        );
-        
-        companionTokens.push({
-          tokenId: mainVisitorTokenId,
-          email: mainVisitor.email
-        });
-        
-        // Create tokens for additional visitors
+        // Group walk-in - all visitors already created in visitors table above
+        console.log('✅ Group walk-in: All visitor records already created in visitors table');
+      } else if (type === 'group') {
+        // Regular group booking - create tokens for additional visitors to complete their forms
         for (let i = 0; i < membersToProcess.length; i++) {
           const member = membersToProcess[i];
-          const tokenId = `GROUPWALKIN-${bookingId}-${i + 1}`;
+          const tokenId = `GROUP-${bookingId}-${i + 1}`;
           
+          // Create token for additional visitor form
           await conn.query(
             `INSERT INTO additional_visitors (token_id, booking_id, email, expires_at) VALUES (?, ?, ?, ?)`,
             [tokenId, bookingId, member.email, expiresAt]
@@ -309,6 +285,12 @@ router.post('/book', async (req, res) => {
         console.error('Error details:', emailError.message);
         // Don't fail the booking if email fails
       }
+    } else if (type === 'ind-walkin') {
+      console.log(`Individual walk-in booking detected: ${type}`);
+      console.log(`Main visitor email: ${mainVisitor.email}`);
+      console.log(`Booking ID: ${bookingId}`);
+      console.log(`Date: ${date}, Time: ${time}`);
+      // For ind-walkin, visitor is already in visitors table, no additional email needed
     } else {
       console.log(`Regular booking type: ${type} - no immediate email sent`);
     }
@@ -330,7 +312,19 @@ router.post('/book', async (req, res) => {
 router.get('/all', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT * FROM bookings ORDER BY date DESC, time_slot`
+      `SELECT 
+        b.*,
+        v.first_name,
+        v.last_name,
+        v.email,
+        v.gender,
+        v.address,
+        v.visitor_type,
+        v.purpose,
+        v.institution
+       FROM bookings b
+       LEFT JOIN visitors v ON b.booking_id = v.booking_id AND v.is_main_visitor = 1
+       ORDER BY b.date DESC, b.time_slot`
     );
     res.json(rows);
   } catch (err) {
@@ -368,28 +362,28 @@ router.put('/bookings/:id/approve', async (req, res) => {
     const isWalkInScheduling = booking.type === 'walk-in scheduling';
     const isIndWalkin = booking.type === 'ind-walkin';
     const isGroupWalkin = booking.type === 'group-walkin';
+    
+    console.log('🎫 Booking type:', booking.type);
+    console.log('📋 Is walk-in scheduling:', isWalkInScheduling);
+    console.log('👤 Is individual walk-in:', isIndWalkin);
+    console.log('👥 Is group walk-in:', isGroupWalkin);
 
     // 3. Get main visitor's email, name, and institution
     let mainVisitor = null;
     
     if (isGroupWalkin) {
-      // For group walk-in, get the primary visitor email from additional_visitors (token ending with -0)
+      // For group walk-in, get the primary visitor from visitors table
       const [groupWalkinRows] = await pool.query(
-        `SELECT email FROM additional_visitors WHERE booking_id = ? AND token_id LIKE ?`,
-        [id, `GROUPWALKIN-${id}-0`]
+        `SELECT visitor_id, email, first_name, last_name, institution FROM visitors WHERE booking_id = ? AND is_main_visitor = true`,
+        [id]
       );
       if (groupWalkinRows.length > 0) {
-        mainVisitor = {
-          email: groupWalkinRows[0].email,
-          first_name: '',
-          last_name: '',
-          institution: ''
-        };
+        mainVisitor = groupWalkinRows[0];
       }
     } else {
       // For other booking types, get from visitors table
       const [visitorRows] = await pool.query(
-        `SELECT email, first_name, last_name, institution FROM visitors WHERE booking_id = ? AND is_main_visitor = true`,
+        `SELECT visitor_id, email, first_name, last_name, institution FROM visitors WHERE booking_id = ? AND is_main_visitor = true`,
         [id]
       );
       if (visitorRows.length > 0) {
@@ -401,17 +395,65 @@ router.put('/bookings/:id/approve', async (req, res) => {
       return res.json({ success: true, message: 'Booking approved, but no email sent (no visitor email found).' });
     }
 
-    // 4. Get companions (if any)
-    const [companionRows] = await pool.query(
-      `SELECT token_id, email FROM additional_visitors WHERE booking_id = ?`,
+    // 4. Check booking type first
+    const [bookingType] = await pool.query(
+      `SELECT type FROM bookings WHERE booking_id = ?`,
       [id]
     );
+    const hasWalkInTokens = bookingType[0]?.type?.includes('walk-in') || false;
 
-    const walkInToken = companionRows.find(companion => 
-      companion.token_id.startsWith('WALKIN-') || 
-      companion.token_id.startsWith('INDWALKIN-') ||
-      companion.token_id.startsWith('GROUPWALKIN-')
-    );
+    // 5. Get companions (if any) - check both tables based on booking type
+    let companionRows = [];
+    
+    if (hasWalkInTokens) {
+      // For walk-in bookings, get from visitors table
+      const [visitorCompanions] = await pool.query(
+        `SELECT visitor_id as token_id, email FROM visitors WHERE booking_id = ? AND is_main_visitor = 0`,
+        [id]
+      );
+      companionRows = visitorCompanions;
+    } else {
+      // For regular group bookings, get from additional_visitors table (tokens)
+      const [tokenCompanions] = await pool.query(
+        `SELECT token_id, email FROM additional_visitors WHERE booking_id = ?`,
+        [id]
+      );
+      
+      // If no tokens exist, create them now (for existing bookings)
+      if (tokenCompanions.length === 0) {
+        console.log('🔄 No tokens found, creating them for booking approval...');
+        
+        // Get additional visitors from visitors table
+        const [additionalVisitors] = await pool.query(
+          `SELECT email FROM visitors WHERE booking_id = ? AND is_main_visitor = 0`,
+          [id]
+        );
+        
+        // Create tokens for each additional visitor
+        for (let i = 0; i < additionalVisitors.length; i++) {
+          const visitor = additionalVisitors[i];
+          const tokenId = `GROUP-${id}-${i + 1}`;
+          const expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours from now
+          
+          await pool.query(
+            `INSERT INTO additional_visitors (token_id, booking_id, email, expires_at) VALUES (?, ?, ?, ?)`,
+            [tokenId, id, visitor.email, expiresAt]
+          );
+          
+          console.log(`✅ Created token ${tokenId} for ${visitor.email}`);
+        }
+        
+        // Re-query to get the newly created tokens
+        const [newTokenCompanions] = await pool.query(
+          `SELECT token_id, email FROM additional_visitors WHERE booking_id = ?`,
+          [id]
+        );
+        companionRows = newTokenCompanions;
+      } else {
+        companionRows = tokenCompanions;
+      }
+    }
 
     // 5. Generate QR codes and prepare email content
     let emailContent = `Hi ${mainVisitor.first_name},\n\nYour museum visit is confirmed!\n\n`;
@@ -485,10 +527,10 @@ router.put('/bookings/:id/approve', async (req, res) => {
       for (let i = 0; i < companionRows.length; i++) {
         const companion = companionRows[i];
         
-        // Generate QR code data for companion (token-based)
+        // Generate QR code data for companion
         const qrData = {
           type: 'additional_visitor',
-          tokenId: companion.token_id,
+          tokenId: companion.token_id, // Use tokenId for pre-generated QR codes
           bookingId: id,
           email: companion.email,
           visitDate: booking.date,
@@ -510,6 +552,7 @@ router.put('/bookings/:id/approve', async (req, res) => {
         companionEmailContent += `   Time: ${booking.time_slot}\n`;
         companionEmailContent += `   Group Leader: ${mainVisitor.first_name} ${mainVisitor.last_name}\n\n`;
         companionEmailContent += `📋 **Your QR Code**: Attached to this email\n`;
+        companionEmailContent += `🔑 **Backup Code**: ${companion.token_id} (use if QR code doesn't work)\n\n`;
         companionEmailContent += `🔗 **Complete Your Details**:\n`;
         companionEmailContent += `   Click here: ${companionFormUrl}\n\n`;
         companionEmailContent += `📝 **Important**: Please complete your details using the link above before your visit.\n\n`;
@@ -533,6 +576,12 @@ router.put('/bookings/:id/approve', async (req, res) => {
             <h3>📋 Your QR Code</h3>
             <p>Your QR code is attached to this email.</p>
             
+            <h3>🔑 Backup Code</h3>
+            <p>If your QR code doesn't work, use this backup code:</p>
+            <div style="background: #f8f9fa; padding: 15px; text-align: center; margin: 10px 0; border-radius: 5px;">
+                <h2 style="color: #AB8841; font-size: 24px; margin: 0; letter-spacing: 3px; font-family: monospace;">${companion.visitor_id}</h2>
+            </div>
+            
             <h3>🔗 Complete Your Details</h3>
             <p>Please click the link below to complete your information:</p>
             <p style="margin: 20px 0;">
@@ -555,8 +604,7 @@ router.put('/bookings/:id/approve', async (req, res) => {
           contentType: 'image/png'
         }];
 
-        // Update companion email content to include their token ID as backup code
-        companionEmailContent += `🔑 **Backup Code**: ${companion.token_id} (use if QR code doesn't work)\n\n`;
+        // Backup code is already included in the email content above
         
         // Update companion HTML email to include backup code
         companionEmailHtml = companionEmailHtml.replace(
@@ -575,14 +623,20 @@ router.put('/bookings/:id/approve', async (req, res) => {
         );
 
         // Send email to companion
-        await transporter.sendMail({
-          from: 'MuseoSmart <museoweb1@gmail.com>',
-          to: companion.email,
-          subject: 'Complete Your Museum Visit Details 🎫',
-          text: companionEmailContent,
-          html: companionEmailHtml,
-          attachments: companionAttachments
-        });
+        try {
+          await transporter.sendMail({
+            from: 'MuseoSmart <museoweb1@gmail.com>',
+            to: companion.email,
+            subject: 'Complete Your Museum Visit Details 🎫',
+            text: companionEmailContent,
+            html: companionEmailHtml,
+            attachments: companionAttachments
+          });
+          console.log(`✅ Companion email sent to: ${companion.email}`);
+        } catch (emailError) {
+          console.log(`⚠️ Companion email failed for ${companion.email}:`, emailError.message);
+          // Continue processing other companions
+        }
 
         emailContent += `👤 **Companion ${i + 1} (${companion.email})**: Email sent with QR code and form link.\n`;
       }
@@ -640,26 +694,44 @@ router.put('/bookings/:id/approve', async (req, res) => {
 
     // 6. Send email based on booking type
     if (isWalkInScheduling || isIndWalkin) {
-      // Send individual walk-in email
-      const walkInFormUrl = `http://localhost:5173/walkin-visitor?token=${walkInToken.token_id}`;
+      // For individual walk-in, we don't need to find a token - the visitor is already in the visitors table
+      if (isIndWalkin) {
+        // Get form link for registration using visitor_id
+        const walkInFormUrl = `http://localhost:5173/walkin-visitor?visitorId=${mainVisitor.visitor_id}`;
       
-              const walkInEmailHtml = `
+        // For individual walk-in, send single email with QR code, backup code, and form link
+        // Generate QR code for immediate use
+        const qrData = {
+          type: 'walkin_visitor',
+          visitorId: mainVisitor.visitor_id,
+          bookingId: id,
+          email: mainVisitor.email,
+          visitDate: booking.date,
+          visitTime: booking.time_slot,
+          visitorName: `${mainVisitor.first_name} ${mainVisitor.last_name}`
+        };
+        
+        const qrCodeDataUrl = await QRCode.toDataURL(JSON.stringify(qrData));
+        const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
+        
+        // Create comprehensive email with QR code attachment
+        const comprehensiveWalkInEmailHtml = `
         <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
             <div style="background: linear-gradient(135deg, #AB8841 0%, #8B6B21 100%); padding: 30px; text-align: center; color: white;">
-                <h1 style="margin: 0; font-size: 28px;">🎫 Your Walk-In Visit is Approved!</h1>
-                <p style="margin: 10px 0 0 0; font-size: 16px;">Complete your walk-in registration to get your QR code</p>
+                <h1 style="margin: 0; font-size: 28px;">🎫 Your Walk-In Visit is Ready!</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px;">Complete your registration and get your QR code</p>
             </div>
             
             <div style="padding: 30px; background: #faf7f1;">
-                <h2 style="color: #2e2b41; margin-bottom: 20px;">Hello!</h2>
+                <h2 style="color: #2e2b41; margin-bottom: 20px;">Hello ${mainVisitor.first_name}!</h2>
                 
                 <p style="color: #2e2b41;">Your walk-in museum visit has been <strong>approved</strong> for <strong>${booking.date}</strong> at <strong>${booking.time_slot}</strong>.</p>
                 
                 <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #AB8841;">
-                    <h3 style="color: #AB8841; margin-top: 0;">📋 Complete Your Walk-In Registration</h3>
-                    <p style="color: #2e2b41;">To get your QR code and complete your walk-in visit, please click the link below and fill in your details:</p>
-                    <a href="${walkInFormUrl}" style="display: inline-block; background: #AB8841; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; transition: background-color 0.3s;">Complete Walk-In Registration</a>
+                    <h3 style="color: #AB8841; margin-top: 0;">📋 Complete Your Registration</h3>
+                    <p style="color: #2e2b41;">Please click the link below to complete your registration and get your QR code:</p>
+                    <a href="${walkInFormUrl}" style="display: inline-block; background: #AB8841; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; transition: background-color 0.3s;">Complete My Registration</a>
                 </div>
                 
                 <div style="background: #f5f4f7; border: 1px solid #2e2b41; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -673,36 +745,149 @@ router.put('/bookings/:id/approve', async (req, res) => {
                 <div style="background: #fdf6e3; border: 1px solid #AB8841; border-radius: 5px; padding: 15px; margin: 20px 0;">
                     <h4 style="margin-top: 0; color: #8B6B21;">⏰ Important Notice</h4>
                     <p style="margin: 0; font-size: 14px; color: #8B6B21;">
-                        <strong>24-Hour Expiration:</strong> This link will expire in 24 hours. Please complete your profile within this time to receive your QR code.
+                        <strong>24-Hour Expiration:</strong> This registration link will expire in 24 hours. Please complete your profile within this time.
                     </p>
                 </div>
                 
                 <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #AB8841;">
-                    <p style="margin: 0 0 10px 0; font-size: 16px; color: #2e2b41;">Please complete your profile as soon as possible to receive your QR code.</p>
+                    <p style="margin: 0 0 10px 0; font-size: 16px; color: #2e2b41;">Please complete your registration as soon as possible.</p>
                     <p style="margin: 0; color: #AB8841;">Best regards,<br><strong>MuseoSmart Team</strong></p>
                 </div>
             </div>
         </body>
         </html>
       `;
-      
-      await transporter.sendMail({
-        from: 'MuseoSmart <museoweb1@gmail.com>',
-        to: mainVisitor.email,
-        subject: '🎫 Your Walk-In Museum Visit - Complete Your Profile',
-        html: walkInEmailHtml
-      });
+        
+        // Send single email with QR code attachment and form link
+        await transporter.sendMail({
+          from: 'MuseoSmart <museoweb1@gmail.com>',
+          to: mainVisitor.email,
+          subject: '🎫 Your Walk-In Museum Visit - Complete Registration',
+          html: comprehensiveWalkInEmailHtml,
+          attachments: [{
+            filename: 'walkin_qr_code.png',
+            content: Buffer.from(base64Data, 'base64'),
+            contentType: 'image/png'
+          }]
+        });
+        
+        console.log('✅ Single comprehensive individual walk-in email sent with QR code and form link');
+      } else if (isWalkInScheduling) {
+        // For walk-in scheduling, we need to find the walk-in token
+        const walkInToken = companionRows.find(companion => 
+          companion.token_id.startsWith('WALKIN-') || 
+          companion.token_id.startsWith('INDWALKIN-')
+        );
+        
+        if (walkInToken) {
+          // Get form link for registration using token
+          const walkInFormUrl = `http://localhost:5173/walkin-visitor?token=${walkInToken.token_id}`;
+          
+          // Generate QR code for immediate use
+          const qrData = {
+            type: 'walkin_visitor',
+            tokenId: walkInToken.token_id,
+            bookingId: id,
+            email: mainVisitor.email,
+            visitDate: booking.date,
+            visitTime: booking.time_slot,
+            visitorName: `${mainVisitor.first_name} ${mainVisitor.last_name}`
+          };
+          
+          const qrCodeDataUrl = await QRCode.toDataURL(JSON.stringify(qrData));
+          const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
+          
+          // Create comprehensive email with QR code attachment
+          const comprehensiveWalkInEmailHtml = `
+          <html>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+              <div style="background: linear-gradient(135deg, #AB8841 0%, #8B6B21 100%); padding: 30px; text-align: center; color: white;">
+                  <h1 style="margin: 0; font-size: 28px;">🎫 Your Walk-In Visit is Ready!</h1>
+                  <p style="margin: 10px 0 0 0; font-size: 16px;">Complete your registration and get your QR code</p>
+              </div>
+              
+              <div style="padding: 30px; background: #faf7f1;">
+                  <h2 style="color: #2e2b41; margin-bottom: 20px;">Hello ${mainVisitor.first_name}!</h2>
+                  
+                  <p style="color: #2e2b41;">Your walk-in museum visit has been <strong>approved</strong> for <strong>${booking.date}</strong> at <strong>${booking.time_slot}</strong>.</p>
+                  
+                  <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #AB8841;">
+                      <h3 style="color: #AB8841; margin-top: 0;">📋 Complete Your Registration</h3>
+                      <p style="color: #2e2b41;">Please click the link below to complete your registration and get your QR code:</p>
+                      <a href="${walkInFormUrl}" style="display: inline-block; background: #AB8841; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; transition: background-color 0.3s;">Complete My Registration</a>
+                  </div>
+                  
+                  <div style="background: #f5f4f7; border: 1px solid #2e2b41; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                      <h4 style="margin-top: 0; color: #2e2b41;">📅 Visit Details</h4>
+                      <p style="color: #2e2b41;"><strong>Date:</strong> ${booking.date}</p>
+                      <p style="color: #2e2b41;"><strong>Time:</strong> ${booking.time_slot}</p>
+                      <p style="color: #2e2b41;"><strong>Booking ID:</strong> ${id}</p>
+                      <p style="color: #2e2b41;"><strong>Status:</strong> ✅ Approved</p>
+                  </div>
+                  
+                  <div style="background: #fdf6e3; border: 1px solid #AB8841; border-radius: 5px; padding: 15px; margin: 20px 0;">
+                      <h4 style="margin-top: 0; color: #8B6B21;">⏰ Important Notice</h4>
+                      <p style="margin: 0; font-size: 14px; color: #8B6B21;">
+                          <strong>24-Hour Expiration:</strong> This registration link will expire in 24 hours. Please complete your profile within this time.
+                      </p>
+                  </div>
+                  
+                  <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #AB8841;">
+                      <p style="margin: 0 0 10px 0; font-size: 16px; color: #2e2b41;">Please complete your registration as soon as possible.</p>
+                      <p style="margin: 0; color: #AB8841;">Best regards,<br><strong>MuseoSmart Team</strong></p>
+                  </div>
+              </div>
+          </body>
+          </html>
+        `;
+          
+          // Send single email with QR code attachment and form link
+          await transporter.sendMail({
+            from: 'MuseoSmart <museoweb1@gmail.com>',
+            to: mainVisitor.email,
+            subject: '🎫 Your Walk-In Museum Visit - Complete Registration',
+            html: comprehensiveWalkInEmailHtml,
+            attachments: [{
+              filename: 'walkin_qr_code.png',
+              content: Buffer.from(base64Data, 'base64'),
+              contentType: 'image/png'
+            }]
+          });
+          
+          console.log('✅ Single comprehensive walk-in scheduling email sent with QR code and form link');
+        } else {
+          console.log('⚠️ No walk-in token found for walk-in scheduling visitor');
+        }
+      }
     } else if (isGroupWalkin) {
+      console.log('🎯 Processing group walk-in booking...');
+      console.log('📧 Main visitor:', mainVisitor);
+      console.log('👥 Companion rows:', companionRows.length);
+      
       // UNIQUE GROUP WALK-IN LOGIC: Only primary visitor gets email with form link
       // Additional visitors will get QR codes directly when primary visitor completes form
       
-      // Find the primary visitor token (ending with -0)
-      const primaryVisitorToken = companionRows.find(companion => 
-        companion.token_id.endsWith('-0')
-      );
-      
-                 if (primaryVisitorToken) {
-             const primaryFormUrl = `http://localhost:5173/group-walkin-leader?token=${primaryVisitorToken.token_id}`;
+      // For group walk-in, we already have mainVisitor from the visitors table
+      if (mainVisitor && mainVisitor.visitor_id) {
+        // Generate QR code for primary visitor
+        const qrData = {
+          type: 'walkin_visitor',
+          visitorId: mainVisitor.visitor_id,
+          bookingId: id,
+          email: mainVisitor.email,
+          visitDate: booking.date,
+          visitTime: booking.time_slot,
+          visitorName: `${mainVisitor.first_name} ${mainVisitor.last_name}`
+        };
+        
+        const qrCodeDataUrl = await QRCode.toDataURL(JSON.stringify(qrData));
+        const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
+        
+        // Generate backup code
+        const backupCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
+        // For group walk-in, use visitor_id for the leader form
+        const primaryFormUrl = `http://localhost:5173/group-walkin-leader?visitorId=${mainVisitor.visitor_id}`;
         
         const groupWalkInPrimaryEmailHtml = `
         <html>
@@ -759,19 +944,42 @@ router.put('/bookings/:id/approve', async (req, res) => {
           from: 'MuseoSmart <museoweb1@gmail.com>',
           to: mainVisitor.email,
           subject: '🎫 Your Group Walk-In Museum Visit - Complete Group Leader Registration',
-          html: groupWalkInPrimaryEmailHtml
+          html: groupWalkInPrimaryEmailHtml,
+          attachments: [{
+            filename: 'group_leader_qr_code.png',
+            content: Buffer.from(base64Data, 'base64'),
+            contentType: 'image/png'
+          }]
         });
+        
+        // Store QR code and backup code in database
+        await pool.query(
+          `UPDATE visitors SET qr_code = ?, backup_code = ? WHERE visitor_id = ?`,
+          [base64Data, backupCode, mainVisitor.visitor_id]
+        );
+        
+        console.log('✅ Group walk-in leader email sent with QR code and form link');
+        console.log('📧 Email sent to:', mainVisitor.email);
+        console.log('🔗 Form URL:', primaryFormUrl);
+      } else {
+        console.log('❌ No mainVisitor or visitor_id found for group walk-in');
       }
     } else {
       // Send regular booking email
-      await transporter.sendMail({
-        from: 'MuseoSmart <museoweb1@gmail.com>',
-        to: mainVisitor.email,
-        subject: 'Your Museum Visit is Confirmed! 🎫',
-        text: emailContent,
-        html: emailHtml,
-        attachments: attachments
-      });
+      try {
+        await transporter.sendMail({
+          from: 'MuseoSmart <museoweb1@gmail.com>',
+          to: mainVisitor.email,
+          subject: 'Your Museum Visit is Confirmed! 🎫',
+          text: emailContent,
+          html: emailHtml,
+          attachments: attachments
+        });
+        console.log('✅ Main visitor email sent successfully');
+      } catch (emailError) {
+        console.log('⚠️ Email sending failed, but booking approved:', emailError.message);
+        // Continue with success response even if email fails
+      }
     }
 
     try { await logActivity(req, 'booking.approve', { bookingId: id, emailSent: true, companions: companionRows.length }); } catch {}
@@ -821,7 +1029,7 @@ router.put('/bookings/:id/reject', async (req, res) => {
 });
 
 // Delete a booking
-router.delete('/bookings/:id', async (req, res) => {
+router.delete('/bookings/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query(
@@ -883,6 +1091,19 @@ router.get('/visit/checkin/:id', async (req, res) => {
     let visitor = null;
     if (visitorRows.length > 0) {
       visitor = visitorRows[0];
+      console.log('🔍 Primary visitor data from database:', {
+        first_name: visitor.first_name,
+        last_name: visitor.last_name,
+        email: visitor.email,
+        gender: visitor.gender,
+        visitor_type: visitor.visitor_type,
+        address: visitor.address,
+        institution: visitor.institution,
+        purpose: visitor.purpose,
+        is_main_visitor: visitor.is_main_visitor
+      });
+    } else {
+      console.log('❌ No primary visitor found for booking ID:', id);
     }
     
     // Update visitor status and check-in time
@@ -896,20 +1117,17 @@ router.get('/visit/checkin/:id', async (req, res) => {
     // Check if all visitors for this booking are checked in
     const [allVisitors] = await pool.query(
       `SELECT 
-        (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = true) as main_visitors,
-        (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = true AND status = 'visited') as main_checked_in,
-        (SELECT COUNT(*) FROM additional_visitors WHERE booking_id = ?) as additional_visitors,
-        (SELECT COUNT(*) FROM additional_visitors WHERE booking_id = ? AND status = 'checked-in') as additional_checked_in
-      `,
-      [id, id, id, id]
+        COUNT(*) as total_visitors,
+        COUNT(CASE WHEN status = 'visited' THEN 1 END) as checked_in_visitors
+      FROM visitors 
+      WHERE booking_id = ?`,
+      [id]
     );
     
     const visitorCount = allVisitors[0];
-    const totalVisitors = visitorCount.main_visitors + visitorCount.additional_visitors;
-    const checkedInVisitors = visitorCount.main_checked_in + visitorCount.additional_checked_in;
     
     // If all visitors are checked in, update booking status to 'checked-in'
-    if (totalVisitors > 0 && checkedInVisitors >= totalVisitors) {
+    if (visitorCount.total_visitors > 0 && visitorCount.checked_in_visitors >= visitorCount.total_visitors) {
       await pool.query(
         `UPDATE bookings SET status = 'checked-in', checkin_time = NOW() WHERE booking_id = ?`,
         [id]
@@ -928,23 +1146,20 @@ router.get('/visit/checkin/:id', async (req, res) => {
     
     res.json({
       success: true,
-      message: 'Check-in successful!',
-      booking: {
-        id: booking.booking_id,
-        name: `${booking.first_name} ${booking.last_name}`,
-        date: booking.date,
-        time: booking.time_slot,
-        type: booking.type,
-        totalVisitors: booking.total_visitors
-      },
+      message: 'Primary visitor checked in successfully!',
       visitor: visitor ? {
-        id: visitor.visitor_id,
-        name: `${visitor.first_name} ${visitor.last_name}`,
+        firstName: visitor.first_name,
+        lastName: visitor.last_name,
         email: visitor.email,
         gender: visitor.gender,
         visitorType: visitor.visitor_type,
-        purpose: visitor.purpose,
-        checkin_time: actualCheckinTime
+        visitorCategory: 'primary_visitor',
+        address: visitor.address,
+        institution: visitor.institution || 'N/A',
+        purpose: visitor.purpose || 'N/A',
+        visitDate: booking.date,
+        visitTime: booking.time_slot,
+        checkin_time: actualCheckinTime ? actualCheckinTime.toISOString() : new Date().toISOString()
       } : null
     });
     
@@ -969,181 +1184,203 @@ router.post('/visit/qr-scan', async (req, res) => {
     const qrInfo = JSON.parse(qrData);
     
     if (qrInfo.type === 'additional_visitor') {
-      // SEPARATE LOGIC FOR ADDITIONAL VISITORS
-      const { tokenId } = qrInfo;
+      // UNIFIED LOGIC FOR ALL VISITORS (now using visitors table)
+      const { visitorId, tokenId } = qrInfo;
       
-      console.log('🎯 Processing Additional Visitor QR Code:', tokenId);
+      console.log('🎯 Processing Additional Visitor QR Code:', { visitorId, tokenId });
+      console.log('🔍 QR Code Data:', qrInfo);
       
-      // Get additional visitor information
-      const [tokenRows] = await pool.query(
-        `SELECT av.*, b.date as visit_date, b.time_slot, b.status as booking_status
-         FROM additional_visitors av
-         JOIN bookings b ON av.booking_id = b.booking_id
-         WHERE av.token_id = ?`,
-        [tokenId]
-      );
+      let visitorRows;
       
-      if (tokenRows.length === 0) {
-        return res.status(404).json({ 
+      if (visitorId) {
+        // New QR codes with visitorId - fetch complete visitor data
+        [visitorRows] = await pool.query(
+          `SELECT 
+            v.visitor_id,
+            v.first_name,
+            v.last_name,
+            v.gender,
+            v.address,
+            v.email,
+            v.visitor_type,
+            v.purpose,
+            v.institution,
+            v.status,
+            v.checkin_time,
+            v.is_main_visitor,
+            b.date as visit_date, 
+            b.time_slot, 
+            b.status as booking_status
+           FROM visitors v
+           JOIN bookings b ON v.booking_id = b.booking_id
+           WHERE v.visitor_id = ? AND v.is_main_visitor = false`,
+          [visitorId]
+        );
+      } else if (tokenId) {
+        // Legacy QR codes with tokenId - find visitor by email from token
+        const [tokenRows] = await pool.query(
+          `SELECT email FROM additional_visitors WHERE token_id = ?`,
+          [tokenId]
+        );
+        
+        if (tokenRows.length === 0) {
+          return res.status(404).json({ 
+            success: false, 
+            error: 'Token not found or expired' 
+          });
+        }
+        
+        const tokenEmail = tokenRows[0].email;
+        
+        [visitorRows] = await pool.query(
+          `SELECT 
+            v.visitor_id,
+            v.first_name,
+            v.last_name,
+            v.gender,
+            v.address,
+            v.email,
+            v.visitor_type,
+            v.purpose,
+            v.institution,
+            v.status,
+            v.checkin_time,
+            v.is_main_visitor,
+            b.date as visit_date, 
+            b.time_slot, 
+            b.status as booking_status
+           FROM visitors v
+           JOIN bookings b ON v.booking_id = b.booking_id
+           WHERE v.email = ? AND v.is_main_visitor = false
+           ORDER BY v.visitor_id DESC LIMIT 1`,
+          [tokenEmail]
+        );
+      } else {
+        return res.status(400).json({ 
           success: false, 
-          error: 'Additional visitor token not found' 
+          error: 'Invalid QR code format' 
         });
       }
       
-      const tokenInfo = tokenRows[0];
-      console.log('📋 Token Info:', {
-        status: tokenInfo.status,
-        booking_status: tokenInfo.booking_status,
-        email: tokenInfo.email
+      if (visitorRows.length === 0) {
+        console.log('❌ No visitor found with the given criteria');
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Additional visitor not found' 
+        });
+      }
+      
+      console.log('✅ Found visitor record:', visitorRows.length, 'records');
+      
+      const visitor = visitorRows[0];
+      console.log('📋 Visitor Info:', {
+        visitor_id: visitor.visitor_id,
+        first_name: visitor.first_name,
+        last_name: visitor.last_name,
+        gender: visitor.gender,
+        address: visitor.address,
+        visitor_type: visitor.visitor_type,
+        institution: visitor.institution,
+        purpose: visitor.purpose,
+        status: visitor.status,
+        booking_status: visitor.booking_status,
+        email: visitor.email
       });
       
       // Check if booking is valid
-      if (tokenInfo.booking_status === 'cancelled') {
+      if (visitor.booking_status === 'cancelled') {
         return res.status(400).json({ 
           success: false, 
           error: 'This booking has been cancelled and cannot be checked in.',
-          status: tokenInfo.booking_status 
+          status: visitor.booking_status 
         });
       }
       
-      // Check if details are completed
-      if (tokenInfo.status !== 'completed') {
+      // Check if QR code has already been used (PREVENT RE-SCANNING)
+      if (visitor.qr_used === 1 || visitor.qr_used === true) {
         return res.status(400).json({ 
           success: false, 
-          error: 'Visitor details must be completed before check-in.',
-          status: tokenInfo.status 
+          error: 'This QR code has already been used and cannot be scanned again.',
+          qrUsed: true
         });
       }
       
-      // Check if already checked in
-      if (tokenInfo.status === 'checked-in') {
+      // Check if already checked in (PREVENT RE-SCANNING)
+      if (visitor.status === 'visited') {
         return res.status(400).json({ 
           success: false, 
           error: 'This visitor has already been checked in.',
-          status: tokenInfo.status 
+          status: visitor.status,
+          alreadyCheckedIn: true
         });
       }
       
-      // STEP 1: Update additional_visitors table with check-in time
-      console.log('⏰ Setting check-in time for additional visitor...');
+      // STEP 1: Update visitors table with check-in time and mark QR as used
+      console.log('⏰ Setting check-in time for additional visitor and marking QR as used...');
       await pool.query(
-        `UPDATE additional_visitors 
-         SET status = 'checked-in', checkin_time = NOW()
-         WHERE token_id = ?`,
-        [tokenId]
+        `UPDATE visitors 
+         SET status = 'visited', checkin_time = NOW(), qr_used = TRUE
+         WHERE visitor_id = ?`,
+        [visitor.visitor_id]
       );
       
-      // STEP 2: Parse visitor details
-      const details = tokenInfo.details ? JSON.parse(tokenInfo.details) : {};
-      console.log('📝 Visitor Details:', details);
-      
-      // STEP 3: Create/Update visitor record for admin dashboard
-      console.log('👤 Creating visitor record for admin dashboard...');
-      
-      // Check if visitor record already exists
-      const [existingVisitor] = await pool.query(
-        `SELECT visitor_id FROM visitors 
-         WHERE email = ? AND booking_id = ? AND is_main_visitor = false`,
-        [tokenInfo.email, tokenInfo.booking_id]
-      );
-      
-      if (existingVisitor.length > 0) {
-        // Update existing visitor record
-        await pool.query(
-          `UPDATE visitors 
-           SET status = 'visited', checkin_time = NOW()
-           WHERE visitor_id = ?`,
-          [existingVisitor[0].visitor_id]
-        );
-        console.log('✅ Updated existing visitor record');
-      } else {
-        // Insert new visitor record
-        await pool.query(
-          `INSERT INTO visitors (
-            booking_id, first_name, last_name, gender, address, email, 
-            visitor_type, purpose, institution, status, is_main_visitor, 
-            checked_in_by, created_at, checkin_time
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'visited', false, ?, NOW(), NOW())`,
-          [
-            tokenInfo.booking_id,
-            details.firstName || '',
-            details.lastName || '',
-            details.gender || '',
-            details.address || '',
-            tokenInfo.email,
-            details.visitorType || '',
-            details.purpose || 'educational',
-            details.institution || '',
-            req.user?.user_ID || null
-          ]
-        );
-        console.log('✅ Created new visitor record');
-      }
-      
-      // STEP 4: Get the actual check-in time that was just set
+      // STEP 2: Get the actual check-in time that was just set
       const [checkinTimeResult] = await pool.query(
-        `SELECT checkin_time FROM additional_visitors WHERE token_id = ?`,
-        [tokenId]
+        `SELECT checkin_time FROM visitors WHERE visitor_id = ?`,
+        [visitor.visitor_id]
       );
       
       const actualCheckinTime = checkinTimeResult[0].checkin_time;
       console.log('📅 Actual check-in time:', actualCheckinTime);
       
-      // STEP 5: Check if all visitors are checked in (for booking status)
+      // STEP 3: Check if all visitors are checked in (for booking status)
       const [allVisitors] = await pool.query(
         `SELECT 
-          (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = true) as main_visitors,
-          (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = true AND status = 'visited') as main_checked_in,
-          (SELECT COUNT(*) FROM additional_visitors WHERE booking_id = ?) as additional_visitors,
-          (SELECT COUNT(*) FROM additional_visitors WHERE booking_id = ? AND status = 'checked-in') as additional_checked_in
-        `,
-        [tokenInfo.booking_id, tokenInfo.booking_id, tokenInfo.booking_id, tokenInfo.booking_id]
+          COUNT(*) as total_visitors,
+          COUNT(CASE WHEN status = 'visited' THEN 1 END) as checked_in_visitors
+        FROM visitors 
+        WHERE booking_id = ?`,
+        [visitor.booking_id]
       );
       
       const visitorCount = allVisitors[0];
-      const totalVisitors = visitorCount.main_visitors + visitorCount.additional_visitors;
-      const checkedInVisitors = visitorCount.main_checked_in + visitorCount.additional_checked_in;
-      
       console.log('📊 Visitor Count:', {
-        total: totalVisitors,
-        checkedIn: checkedInVisitors,
-        mainVisitors: visitorCount.main_visitors,
-        mainCheckedIn: visitorCount.main_checked_in,
-        additionalVisitors: visitorCount.additional_visitors,
-        additionalCheckedIn: visitorCount.additional_checked_in
+        total: visitorCount.total_visitors,
+        checkedIn: visitorCount.checked_in_visitors
       });
       
       // If all visitors are checked in, update booking status
-      if (totalVisitors > 0 && checkedInVisitors >= totalVisitors) {
+      if (visitorCount.total_visitors > 0 && visitorCount.checked_in_visitors >= visitorCount.total_visitors) {
         await pool.query(
           `UPDATE bookings SET status = 'checked-in' WHERE booking_id = ?`,
-          [tokenInfo.booking_id]
+          [visitor.booking_id]
         );
         console.log('✅ All visitors checked in - updated booking status');
       }
       
-      // STEP 6: Log activity
+      // STEP 4: Log activity
       try { 
-        await logActivity(req, 'additional_visitor.checkin', { tokenId, bookingId: tokenInfo.booking_id }); 
+        await logActivity(req, 'visitor.checkin', { visitorId: visitor.visitor_id, bookingId: visitor.booking_id }); 
       } catch (error) {
         console.log('⚠️ Activity logging failed:', error.message);
       }
       
-      // STEP 7: Return success response
+      // STEP 5: Return success response
       res.json({
         success: true,
         message: 'Additional visitor checked in successfully!',
         visitor: {
-          firstName: details.firstName,
-          lastName: details.lastName,
-          email: tokenInfo.email,
-          gender: details.gender,
-          visitorType: details.visitorType,
-          address: details.address,
-          institution: details.institution || 'N/A',
-          groupLeader: qrInfo.groupLeader || 'N/A',
-          visitDate: tokenInfo.visit_date,
-          visitTime: tokenInfo.time_slot,
+          firstName: visitor.first_name,
+          lastName: visitor.last_name,
+          email: visitor.email,
+          gender: visitor.gender,
+          visitorType: visitor.visitor_type,
+          visitorCategory: 'additional_visitor',
+          address: visitor.address,
+          institution: visitor.institution || 'N/A',
+          purpose: visitor.purpose || 'N/A',
+          visitDate: visitor.visit_date,
+          visitTime: visitor.time_slot,
           checkin_time: actualCheckinTime ? actualCheckinTime.toISOString() : new Date().toISOString()
         }
       });
@@ -1171,6 +1408,18 @@ router.post('/visit/qr-scan', async (req, res) => {
       }
       
       const visitor = visitorRows[0];
+      console.log('🔍 Primary visitor data from database:', {
+        first_name: visitor.first_name,
+        last_name: visitor.last_name,
+        email: visitor.email,
+        gender: visitor.gender,
+        visitor_type: visitor.visitor_type,
+        address: visitor.address,
+        institution: visitor.institution,
+        purpose: visitor.purpose,
+        visit_date: visitor.visit_date,
+        time_slot: visitor.time_slot
+      });
       
       // Check if booking is valid
       if (visitor.booking_status === 'cancelled') {
@@ -1178,6 +1427,15 @@ router.post('/visit/qr-scan', async (req, res) => {
           success: false, 
           error: 'This booking has been cancelled and cannot be checked in.',
           status: visitor.booking_status 
+        });
+      }
+      
+      // Check if QR code has already been used (PREVENT RE-SCANNING)
+      if (visitor.qr_used === 1 || visitor.qr_used === true) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'This QR code has already been used and cannot be scanned again.',
+          qrUsed: true
         });
       }
       
@@ -1189,19 +1447,19 @@ router.post('/visit/qr-scan', async (req, res) => {
         });
       }
       
-      // Update visitor status to visited and set check-in time
+      // Update visitor status to visited, set check-in time, and mark QR as used
       await pool.query(
-        `UPDATE visitors SET status = 'visited', checkin_time = NOW() WHERE visitor_id = ?`,
+        `UPDATE visitors SET status = 'visited', checkin_time = NOW(), qr_used = TRUE WHERE visitor_id = ?`,
         [visitorId]
       );
       
       // Check if all visitors for this booking are checked in
       const [allVisitors] = await pool.query(
         `SELECT 
-          (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = true) as main_visitors,
-          (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = true AND status = 'visited') as main_checked_in,
-          (SELECT COUNT(*) FROM additional_visitors WHERE booking_id = ?) as additional_visitors,
-          (SELECT COUNT(*) FROM additional_visitors WHERE booking_id = ? AND status = 'checked-in') as additional_checked_in
+          (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = 1) as main_visitors,
+          (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = 1 AND status = 'visited') as main_checked_in,
+          (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = 0) as additional_visitors,
+          (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = 0 AND status = 'visited') as additional_checked_in
         `,
         [visitor.booking_id, visitor.booking_id, visitor.booking_id, visitor.booking_id]
       );
@@ -1228,21 +1486,28 @@ router.post('/visit/qr-scan', async (req, res) => {
       
       const actualCheckinTime = checkinTimeResult[0].checkin_time;
       
-      res.json({
+      const responseData = {
         success: true,
         message: 'Primary visitor checked in successfully!',
         visitor: {
-          first_name: visitor.first_name,
-          last_name: visitor.last_name,
+          firstName: visitor.first_name,
+          lastName: visitor.last_name,
           email: visitor.email,
           gender: visitor.gender,
           visitorType: visitor.visitor_type,
+          visitorCategory: 'primary_visitor',
           address: visitor.address,
-          visit_date: visitor.visit_date,
-          visit_time: visitor.time_slot,
+          institution: visitor.institution || 'N/A',
+          purpose: visitor.purpose || 'N/A',
+          visitDate: visitor.visit_date,
+          visitTime: visitor.time_slot,
           checkin_time: actualCheckinTime ? actualCheckinTime.toISOString() : new Date().toISOString()
         }
-      });
+      };
+      
+      console.log('🔍 Primary visitor response data:', responseData);
+      
+      res.json(responseData);
       
          } else if (qrInfo.type === 'walkin_visitor') {
            // Handle walk-in visitor QR code
@@ -1250,8 +1515,15 @@ router.post('/visit/qr-scan', async (req, res) => {
            
            console.log('🎯 Processing Walk-in Visitor QR Code:', visitorId);
            
-           // Call the walk-in visitor check-in endpoint
-           const checkinUrl = `${req.protocol}://${req.get('host')}/api/walkin-visitors/${visitorId}/checkin`;
+           // Determine which check-in endpoint to use based on visitor type
+           let checkinUrl;
+           if (visitorId.toString().startsWith('GROUP-') || visitorId.toString().includes('WALKIN-')) {
+             // Additional visitor or group walk-in - use walkin-visitors endpoint
+             checkinUrl = `${req.protocol}://${req.get('host')}/api/walkin-visitors/${visitorId}/checkin`;
+           } else {
+             // Individual walk-in visitor - use individual-walkin endpoint
+             checkinUrl = `${req.protocol}://${req.get('host')}/api/individual-walkin/${visitorId}/checkin`;
+           }
            console.log('🌐 Walk-in check-in URL:', checkinUrl);
            
            const checkinResponse = await fetch(checkinUrl, {
@@ -1281,10 +1553,47 @@ router.post('/visit/qr-scan', async (req, res) => {
              visitor: checkinData.visitor
            });
            
+         } else if (qrInfo.type === 'group_walkin_visitor') {
+           // Handle group walk-in visitor QR code
+           const { tokenId } = qrInfo;
+           
+           console.log('🎯 Processing Group Walk-in Visitor QR Code:', tokenId);
+           
+           // Use the new group-walkin-visitors endpoint
+           const checkinUrl = `${req.protocol}://${req.get('host')}/api/group-walkin-visitors/${tokenId}/checkin`;
+           console.log('🌐 Group walk-in check-in URL:', checkinUrl);
+           
+           const checkinResponse = await fetch(checkinUrl, {
+             method: 'POST',
+             headers: {
+               'Content-Type': 'application/json',
+             }
+           });
+           
+           console.log('📡 Group walk-in check-in response status:', checkinResponse.status);
+           
+           if (!checkinResponse.ok) {
+             const errorData = await checkinResponse.json();
+             console.error('❌ Group walk-in check-in failed:', errorData);
+             return res.status(checkinResponse.status).json({
+               success: false,
+               error: errorData.message || 'Failed to check in group walk-in visitor'
+             });
+           }
+           
+           const checkinData = await checkinResponse.json();
+           console.log('✅ Group walk-in check-in success:', checkinData);
+           
+           res.json({
+             success: true,
+             message: checkinData.message,
+             visitor: checkinData.visitor
+           });
+           
          } else {
        return res.status(400).json({ 
          success: false, 
-         error: 'Invalid QR code type. Expected "additional_visitor", "primary_visitor", or "walkin_visitor".' 
+         error: 'Invalid QR code type. Expected "additional_visitor", "primary_visitor", "walkin_visitor", or "group_walkin_visitor".' 
        });
      }
     

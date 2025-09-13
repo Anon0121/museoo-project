@@ -8,6 +8,7 @@ const WalkInVisitorForm = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = searchParams.get('token');
+  const visitorId = searchParams.get('visitorId');
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -25,45 +26,71 @@ const WalkInVisitorForm = () => {
 
   useEffect(() => {
     const fetchTokenInfo = async () => {
-      if (!token) {
-        setError("No token provided");
+      if (!token && !visitorId) {
+        setError("No token or visitor ID provided");
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        const response = await api.get(`/api/walkin-visitors/${token}`);
         
-        if (response.data.success) {
-          const tokenData = response.data.tokenInfo;
-          
-          // Check if link is expired
-          if (tokenData.linkExpired) {
-            setError("This link has expired. Please contact the museum for assistance.");
-            setLoading(false);
-            return;
+        // Determine which API endpoint to use based on available parameters
+        let response;
+        if (visitorId) {
+          // Individual walk-in visitor - use visitor ID
+          response = await api.get(`/api/individual-walkin/${visitorId}`);
+          if (response.data.success) {
+            const visitorData = response.data.visitorInfo;
+            setTokenInfo(visitorData);
+            // For individual walk-in, only pre-fill email and other fields, but NOT first name and last name
+            setVisitorInfo(prev => ({
+              ...prev,
+              email: visitorData.email,
+              firstName: "", // Don't pre-fill for individual walk-in
+              lastName: "", // Don't pre-fill for individual walk-in
+              gender: visitorData.gender || "",
+              address: visitorData.address || "",
+              visitorType: visitorData.visitorType || "",
+              institution: visitorData.institution || "",
+              purpose: visitorData.purpose || "educational"
+            }));
+          } else {
+            setError("Invalid or expired visitor ID");
           }
-          
-          setTokenInfo(tokenData);
-          // Pre-fill email from token info
-          setVisitorInfo(prev => ({
-            ...prev,
-            email: tokenData.email
-          }));
         } else {
-          setError("Invalid or expired token");
+          // Additional visitor - use token
+          response = await api.get(`/api/walkin-visitors/${token}`);
+          if (response.data.success) {
+            const tokenData = response.data.tokenInfo;
+            
+            // Check if link is expired
+            if (tokenData.linkExpired) {
+              setError("This link has expired. Please contact the museum for assistance.");
+              setLoading(false);
+              return;
+            }
+            
+            setTokenInfo(tokenData);
+            // Pre-fill email from token info
+            setVisitorInfo(prev => ({
+              ...prev,
+              email: tokenData.email
+            }));
+          } else {
+            setError("Invalid or expired token");
+          }
         }
       } catch (err) {
-        console.error("Error fetching token info:", err);
-        setError("Failed to load token information");
+        console.error("Error fetching visitor info:", err);
+        setError("Failed to load visitor information");
       } finally {
         setLoading(false);
       }
     };
 
     fetchTokenInfo();
-  }, [token]);
+  }, [token, visitorId]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -79,15 +106,31 @@ const WalkInVisitorForm = () => {
     setError("");
 
     try {
-      const response = await api.put(`/api/walkin-visitors/${token}`, {
-        firstName: visitorInfo.firstName,
-        lastName: visitorInfo.lastName,
-        gender: visitorInfo.gender,
-        address: visitorInfo.address,
-        visitorType: visitorInfo.visitorType,
-        institution: visitorInfo.institution,
-        purpose: visitorInfo.purpose
-      });
+      // Determine which API endpoint to use based on available parameters
+      let response;
+      if (visitorId) {
+        // Individual walk-in visitor - use visitor ID
+        response = await api.put(`/api/individual-walkin/${visitorId}`, {
+          firstName: visitorInfo.firstName,
+          lastName: visitorInfo.lastName,
+          gender: visitorInfo.gender,
+          address: visitorInfo.address,
+          visitorType: visitorInfo.visitorType,
+          institution: visitorInfo.institution,
+          purpose: visitorInfo.purpose
+        });
+      } else {
+        // Additional visitor - use token
+        response = await api.put(`/api/walkin-visitors/${token}`, {
+          firstName: visitorInfo.firstName,
+          lastName: visitorInfo.lastName,
+          gender: visitorInfo.gender,
+          address: visitorInfo.address,
+          visitorType: visitorInfo.visitorType,
+          institution: visitorInfo.institution,
+          purpose: visitorInfo.purpose
+        });
+      }
 
       if (response.data.success) {
         setSuccess(true);
@@ -205,20 +248,6 @@ const WalkInVisitorForm = () => {
             )}
 
             <form onSubmit={handleSubmit}>
-              {/* Email Field (Read-only) */}
-              <div className="mb-6">
-                <label className="block text-[#2e2b41] font-semibold mb-2">Email Address</label>
-                <input
-                  type="email"
-                  value={visitorInfo.email || ""}
-                  disabled
-                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                />
-                <p className="text-sm text-gray-500 mt-1">Email cannot be changed</p>
-              </div>
-
-              
-
               {/* Personal Information */}
               <div className="grid md:grid-cols-2 gap-6 mb-6">
                 <div>
@@ -247,21 +276,7 @@ const WalkInVisitorForm = () => {
                 </div>
               </div>
 
-              {/* Address */}
-              <div className="mb-6">
-                <label className="block text-[#2e2b41] font-semibold mb-2">Address *</label>
-                <input
-                  type="text"
-                  name="address"
-                  value={visitorInfo.address}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
-                  placeholder="Enter your complete address"
-                />
-              </div>
-
-              {/* Gender and Nationality */}
+              {/* Gender and Visitor Type */}
               <div className="grid md:grid-cols-2 gap-6 mb-6">
                 <div>
                   <label className="block text-[#2e2b41] font-semibold mb-3">Gender *</label>
@@ -305,34 +320,60 @@ const WalkInVisitorForm = () => {
                   </div>
                 </div>
                 <div>
-                                     <label className="block text-[#2e2b41] font-semibold mb-3">Visitor Type *</label>
+                  <label className="block text-[#2e2b41] font-semibold mb-3">Visitor Type *</label>
                   <div className="flex flex-wrap gap-4">
                     <label className="flex items-center">
-                                             <input
-                         type="radio"
-                         name="visitorType"
-                         value="Local"
-                         checked={visitorInfo.visitorType === "Local"}
-                         onChange={handleInputChange}
-                         required
-                         className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
-                       />
-                       <span className="text-sm font-medium">Local</span>
-                     </label>
-                     <label className="flex items-center">
-                       <input
-                         type="radio"
-                         name="visitorType"
-                         value="Foreign"
-                         checked={visitorInfo.visitorType === "Foreign"}
-                         onChange={handleInputChange}
-                         required
-                         className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
-                       />
-                       <span className="text-sm font-medium">Foreign</span>
+                      <input
+                        type="radio"
+                        name="visitorType"
+                        value="Local"
+                        checked={visitorInfo.visitorType === "Local"}
+                        onChange={handleInputChange}
+                        required
+                        className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
+                      />
+                      <span className="text-sm font-medium">Local</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="visitorType"
+                        value="Foreign"
+                        checked={visitorInfo.visitorType === "Foreign"}
+                        onChange={handleInputChange}
+                        required
+                        className="mr-2 text-[#AB8841] focus:ring-[#AB8841]"
+                      />
+                      <span className="text-sm font-medium">Foreign</span>
                     </label>
                   </div>
                 </div>
+              </div>
+
+              {/* Email Field (Read-only) */}
+              <div className="mb-6">
+                <label className="block text-[#2e2b41] font-semibold mb-2">Email Address</label>
+                <input
+                  type="email"
+                  value={visitorInfo.email || ""}
+                  disabled
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                />
+                <p className="text-sm text-gray-500 mt-1">Email cannot be changed</p>
+              </div>
+
+              {/* Address */}
+              <div className="mb-6">
+                <label className="block text-[#2e2b41] font-semibold mb-2">Address *</label>
+                <input
+                  type="text"
+                  name="address"
+                  value={visitorInfo.address}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#AB8841]"
+                  placeholder="Enter your complete address"
+                />
               </div>
 
               {/* Institution and Purpose */}

@@ -8,7 +8,7 @@ const mysql = require('mysql2/promise');
  */
 async function calculateGroupArrivalTime(bookingId, pool) {
   try {
-    // Get all visitor check-in times for this booking
+    // Get all visitor check-in times for this booking from unified visitors table
     const [visitors] = await pool.query(`
       SELECT 
         v.visitor_id,
@@ -16,24 +16,11 @@ async function calculateGroupArrivalTime(bookingId, pool) {
         v.last_name,
         v.checkin_time,
         v.is_main_visitor,
-        'main' as visitor_type
+        CASE WHEN v.is_main_visitor = 1 THEN 'main' ELSE 'additional' END as visitor_type
       FROM visitors v
       WHERE v.booking_id = ? AND v.status = 'visited' AND v.checkin_time IS NOT NULL
-      
-      UNION ALL
-      
-      SELECT 
-        av.token_id as visitor_id,
-        JSON_UNQUOTE(JSON_EXTRACT(av.details, '$.firstName')) as first_name,
-        JSON_UNQUOTE(JSON_EXTRACT(av.details, '$.lastName')) as last_name,
-        av.checkin_time,
-        false as is_main_visitor,
-        'additional' as visitor_type
-      FROM additional_visitors av
-      WHERE av.booking_id = ? AND av.status = 'checked-in' AND av.checkin_time IS NOT NULL
-      
       ORDER BY checkin_time ASC
-    `, [bookingId, bookingId]);
+    `, [bookingId]);
 
     if (visitors.length === 0) {
       return {
@@ -48,11 +35,11 @@ async function calculateGroupArrivalTime(bookingId, pool) {
     // Calculate group arrival time (earliest check-in time)
     const groupArrivalTime = new Date(Math.min(...visitors.map(v => new Date(v.checkin_time))));
     
-    // Get total expected visitors
+    // Get total expected visitors from unified visitors table
     const [bookingInfo] = await pool.query(`
       SELECT 
-        (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = true) as main_visitors,
-        (SELECT COUNT(*) FROM additional_visitors WHERE booking_id = ?) as additional_visitors
+        (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = 1) as main_visitors,
+        (SELECT COUNT(*) FROM visitors WHERE booking_id = ? AND is_main_visitor = 0) as additional_visitors
       FROM bookings WHERE booking_id = ?
     `, [bookingId, bookingId, bookingId]);
 
@@ -117,17 +104,17 @@ async function getGroupCheckinDetails(bookingId, pool) {
       ORDER BY checkin_time ASC
     `, [bookingId]);
 
-    // Get additional visitors
+    // Get additional visitors from unified visitors table
     const [additionalVisitors] = await pool.query(`
       SELECT 
-        token_id,
+        visitor_id as token_id,
         email,
-        details,
+        CONCAT('{"firstName":"', first_name, '","lastName":"', last_name, '","gender":"', gender, '","visitorType":"', visitor_type, '","address":"', address, '","purpose":"', purpose, '","institution":"', institution, '"}') as details,
         status,
         checkin_time,
         created_at
-      FROM additional_visitors 
-      WHERE booking_id = ?
+      FROM visitors 
+      WHERE booking_id = ? AND is_main_visitor = 0
       ORDER BY checkin_time ASC
     `, [bookingId]);
 
@@ -194,16 +181,11 @@ async function getCheckinStatistics(startDate, endDate, pool) {
         MIN(checkin_time) as first_checkin,
         MAX(checkin_time) as last_checkin,
         AVG(TIME_TO_SEC(TIME(checkin_time))) as avg_checkin_time_seconds
-      FROM (
-        SELECT booking_id, checkin_time FROM visitors 
-        WHERE checkin_time BETWEEN ? AND ? AND status = 'visited'
-        UNION ALL
-        SELECT booking_id, checkin_time FROM additional_visitors 
-        WHERE checkin_time BETWEEN ? AND ? AND status = 'checked-in'
-      ) all_checkins
+      FROM visitors 
+      WHERE checkin_time BETWEEN ? AND ? AND status = 'visited'
       GROUP BY DATE(checkin_time)
       ORDER BY checkin_date DESC
-    `, [startDate, endDate, startDate, endDate]);
+    `, [startDate, endDate]);
 
     return stats.map(row => ({
       ...row,

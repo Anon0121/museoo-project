@@ -47,10 +47,10 @@ router.get('/summary', async (req, res) => {
            v.email,
            v.institution,
            v.visitor_type,
-           COUNT(av.token_id) as additional_visitors
+           COUNT(CASE WHEN v2.is_main_visitor = 0 THEN 1 END) as additional_visitors
          FROM bookings b 
          LEFT JOIN visitors v ON b.booking_id = v.booking_id AND v.is_main_visitor = 1
-         LEFT JOIN additional_visitors av ON b.booking_id = av.booking_id
+         LEFT JOIN visitors v2 ON b.booking_id = v2.booking_id
          GROUP BY b.booking_id
          ORDER BY b.created_at DESC 
          LIMIT 5
@@ -102,10 +102,10 @@ router.get('/summary', async (req, res) => {
            v.email,
            v.institution,
            v.visitor_type,
-           COUNT(av.token_id) as additional_visitors
+           COUNT(CASE WHEN v2.is_main_visitor = 0 THEN 1 END) as additional_visitors
          FROM bookings b 
          LEFT JOIN visitors v ON b.booking_id = v.booking_id AND v.is_main_visitor = 1
-         LEFT JOIN additional_visitors av ON b.booking_id = av.booking_id
+         LEFT JOIN visitors v2 ON b.booking_id = v2.booking_id
          WHERE DATE(b.date) = ?
          GROUP BY b.booking_id
          ORDER BY b.time_slot ASC

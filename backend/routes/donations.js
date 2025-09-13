@@ -5,7 +5,19 @@ const fs = require('fs');
 const pool = require('../db');
 const nodemailer = require('nodemailer');
 const router = express.Router();
-const { logActivity } = require('../utils/activityLogger');
+const { logActivity, logUserActivity } = require('../utils/activityLogger');
+
+// Session-based authentication middleware
+const isAuthenticated = (req, res, next) => {
+  if (req.session && req.session.user) {
+    req.user = req.session.user;
+    return next();
+  }
+  return res.status(401).json({ 
+    success: false, 
+    message: 'Not authenticated' 
+  });
+};
 
 // Set up Multer for file uploads
 const storage = multer.diskStorage({
@@ -567,7 +579,7 @@ const sendEmail = async (to, subject, message) => {
 };
 
 // CREATE donation (POST)
-router.post('/', upload.fields([
+router.post('/', isAuthenticated, logUserActivity, upload.fields([
   { name: 'payment_proof', maxCount: 1 },
   { name: 'legal_documents', maxCount: 1 }
 ]), async (req, res) => {
@@ -726,7 +738,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // UPDATE donation (PUT)
-router.put('/:id', async (req, res) => {
+router.put('/:id', isAuthenticated, logUserActivity, async (req, res) => {
   const { id } = req.params;
   const {
     donor_name, donor_email, donor_contact, type, date_received, notes,
@@ -779,7 +791,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE donation
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', isAuthenticated, logUserActivity, async (req, res) => {
   const { id } = req.params;
   const conn = await pool.getConnection();
   try {

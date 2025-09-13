@@ -23,6 +23,7 @@ const getBackendURL = () => {
 };
 
 export const API_BASE_URL = getBackendURL();
+console.log('🌐 API Base URL:', API_BASE_URL);
 
 // Create axios instance with base URL
 import axios from 'axios';
